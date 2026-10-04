@@ -4,7 +4,7 @@
 
 以产品功能和用户场景为骨架：每条功能是用户能感知的一件事；“体验”是它必须做到的，每条都标明由什么检查（自动测试、实机验收、人工验证或已登记的缺口）。数据在 `quality/`，规则见 [quality/README.md](../quality/README.md)。
 
-共 161 条功能、677 条体验，其中 633 条有检查。
+共 161 条功能、678 条体验，其中 634 条有检查。
 
 ## Agent 能力
 
@@ -659,10 +659,11 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 
 经由接口：`kwin-android-host`
 
-- **E1** 普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
+- **E1** 普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（单元测试、人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
 - **E2** Qt Quick 应用和 plasmashell 滚动、切换时没有整屏灰色闪帧（会话默认 QSG_RHI_BACKEND=opengl）。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
 - **E3** 应用抽屉滑动时 Surface 呈现间隔超过 12.6 ms 的比例低于 1%（GLES 合成）。（实机验收、人工；只能在手机上看：呈现间隔是手机 GPU 与安卓刷新下的性能，只能在手机上量）
 - **E4** 系统 Mesa 的包不会被发行版更新覆盖，升级 Mesa 后 KWin 不会因图形复位而中止。（缺口：只能在手机上换包重启工作区验证；没有自动检查）
+- **E5** 同一 Mesa 配方包含 softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL），为 husky 等非高通手机提供 CPU GL 构建路径；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND。（单元测试）
 
 注意：
 - KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。 [docs/research/74-vaapi-feasibility.md](../docs/research/74-vaapi-feasibility.md) [docs/research/93-xwayland-kgsl-gpu.md](../docs/research/93-xwayland-kgsl-gpu.md)
@@ -675,7 +676,7 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 - GPU 与 CPU 共用 7.3 GB 内存，EEVEE 一类 GPU 负载要多占约 1 GB，内存吃紧时安卓会按 LOW_MEMORY 结束进程。 [docs/90-blender-vulkan-incident.md](../docs/90-blender-vulkan-incident.md)
 - 性能对照要交错执行、每轮重启并确认热状态为 0，不锁频不改温控；Surface 呈现间隔、Qt frameSwapped 与 GPU 执行时间是不同的量，不能混用。 [docs/51-plasma-vulkan-benchmark.md](../docs/51-plasma-vulkan-benchmark.md) [desktop/bench/README.md](../desktop/bench/README.md)
 
-文档：[docs/51-plasma-vulkan-benchmark.md](../docs/51-plasma-vulkan-benchmark.md)、[docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)、[docs/research/94-mesa-base.md](../docs/research/94-mesa-base.md)、[desktop/bench/README.md](../desktop/bench/README.md)、[benchmarks/README.md](../benchmarks/README.md)
+文档：[docs/51-plasma-vulkan-benchmark.md](../docs/51-plasma-vulkan-benchmark.md)、[docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)、[docs/research/94-mesa-base.md](../docs/research/94-mesa-base.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)、[desktop/bench/README.md](../desktop/bench/README.md)、[benchmarks/README.md](../benchmarks/README.md)
 
 #### Vulkan 应用（Turnip）
 
@@ -1118,16 +1119,16 @@ Linux 应用用手机的相机拍照录像，用手机的扬声器和麦克风�
 
 文档：[docs/97-local-development-deploy.md](../docs/97-local-development-deploy.md)
 
-#### 在 Mac mini 或手机上构建 ARM64 包
+#### 在本机 Docker、远程 Mac 或手机上构建 ARM64 包
 
-`delivery.build-hosts` · Linux 系统功能 — 设备包和上游组件在 Mac mini 的 Ubuntu 26.04 ARM64 容器里构建（手机为后备），产物进发布或开发仓库。
+`delivery.build-hosts` · Linux 系统功能 — 设备包和上游组件复用 Ubuntu 26.04 ARM64 Docker 镜像，可选择本机或配置远程 Mac（手机为后备），产物进发布或开发仓库。
 
-- **E1** 默认构建机是 Mac mini，速度远快于手机：KWin 含 LTO 的完整构建约 6 分钟，手机上一小时以上；构建期间手机不受影响。（单元测试、人工；只能在手机上看：构建耗时取决于 Mac mini 与手机的硬件，只能在两台机器上实测；默认构建机和不碰手机由单元测试检查）
+- **E1** 默认仍用原作者的 Mac mini，可用 RUNGIC_BUILD_SSH 或 --ssh-host 配置远程地址，用 --host local-docker 在本机原生 ARM64 Docker 构建；本机并行度受 VM CPU、每 2 GiB 内存一个任务和最多 4 个任务限制，构建期间手机不受影响。（单元测试、人工；只能在手机上看：构建耗时取决于 Mac mini 与手机的硬件，只能在两台机器上实测；默认构建机和不碰手机由单元测试检查）
 - **E2** 增量构建只重编改动的文件：源码树用 rsync --checksum 同步，未改文件保留时间戳，保留上次的 obj 树，并按生成文件选择 make 或 Ninja。（单元测试、人工）
 - **E3** 与构建机之间的每次传输都核对大小与 SHA-256，不一致就重试，不会把截断的包收进仓库。（单元测试、人工）
 - **E4** 手机用自己的受限密钥直连构建机，只能 put/get /root/rungic-build 下的相对路径，其他命令、绝对路径和 .. 都被拒绝。（单元测试、人工）
 - **E5** Mac mini 上的构建结果与手机上的完整构建逐文件一致（ELF 去掉 build-id 与 debuglink 后比较），差异只来自可解释的原因。（人工；只能在手机上看：要在手机容器里做一次完整构建（一小时以上）再与 Mac mini 的产物逐文件比较；系统测试只有 Mac mini 一台构建环境，替代不了手机上的那一份）
-- **E6** 构建容器里每条联网命令都带上 Mac mini 的系统代理（scutil 读取，以 host.docker.internal 代替本机地址）。（单元测试）
+- **E6** 本机与远程 Mac 的构建容器每条联网命令都带上所在 Mac 的系统代理（scutil 读取，以 host.docker.internal 代替本机地址）。（单元测试）
 
 注意：
 - 经 ssh 执行的命令和 Docker 容器都不会自动使用 Mac mini 的系统代理（Surge 127.0.0.1:6152），要显式传入；容器 DNS 把 macmini.wire.net 解析成公网地址，手机直连要用 10.77.0.20 或 192.168.5.45。 [AGENTS.md](../AGENTS.md) [docs/71-upstream-patch-queue.md](../docs/71-upstream-patch-queue.md)
@@ -1135,7 +1136,7 @@ Linux 应用用手机的相机拍照录像，用手机的扬声器和麦克风�
 - 比较 aarch64 二进制要用 llvm-objcopy：主机的 objcopy 不认识 aarch64，出错时输出为空，两边哈希会“相同”。 [docs/71-upstream-patch-queue.md](../docs/71-upstream-patch-queue.md)
 - 在手机容器里跑重任务（构建、gdb 加载调试信息）会让 Android 的低内存查杀杀掉 VPN 和 Plasma APK，失去对手机的访问。 [docs/61-delivery-diagnostics-plan.md](../docs/61-delivery-diagnostics-plan.md)
 
-文档：[docs/71-upstream-patch-queue.md](../docs/71-upstream-patch-queue.md)、[docs/53-remote-system-development.md](../docs/53-remote-system-development.md)
+文档：[docs/71-upstream-patch-queue.md](../docs/71-upstream-patch-queue.md)、[docs/53-remote-system-development.md](../docs/53-remote-system-development.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)
 
 #### 开发环境一条命令就绪
 

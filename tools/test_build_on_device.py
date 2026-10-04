@@ -4,6 +4,7 @@
 the default build host, the Mac's system proxy in every container command, the incremental source
 sync, and what the phone's restricted key may do on the build host."""
 import io
+import json
 import os
 import subprocess
 import sys
@@ -112,6 +113,185 @@ class DefaultHostTests(unittest.TestCase):
                 action()
 
 
+class ConfigurableHostTests(unittest.TestCase):
+    """husky contributors need their own build host; the original Adreno owner keeps theirs."""
+
+    # covers: delivery.build-hosts/E1
+    def test_remote_address_is_configurable_and_owner_default_survives(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(build_on_device.MacMini().SSH[-1], 'choukevin@macmini.wire.net')
+        with patch.dict(os.environ, {'RUNGIC_BUILD_SSH': 'builder@studio.example'}):
+            self.assertEqual(build_on_device.MacMini().SSH[-1], 'builder@studio.example')
+        # Explicit CLI selection wins over both environment selections.
+        saved = build_on_device.host
+        self.addCleanup(setattr, build_on_device, 'host', saved)
+        with patch.dict(os.environ, {'RUNGIC_BUILD_HOST': 'phone', 'RUNGIC_BUILD_SSH': 'env@host'}), \
+                patch.object(sys, 'argv', ['build_on_device.py', '--host', 'macmini',
+                                          '--ssh-host', 'cli@host', 'mesa', 'status']), \
+                patch.object(build_on_device, 'status', return_value=''):
+            build_on_device.main()
+        self.assertEqual(build_on_device.host.SSH[-1], 'cli@host')
+
+    # covers: delivery.build-hosts/E1
+    def test_local_docker_selected_from_environment_or_cli_without_phone_access(self):
+        saved = build_on_device.host
+        self.addCleanup(setattr, build_on_device, 'host', saved)
+        for env, argv in [({'RUNGIC_BUILD_HOST': 'local-docker'}, []),
+                          ({'RUNGIC_BUILD_HOST': 'phone'}, ['--host', 'local-docker'])]:
+            with self.subTest(env=env), patch.dict(os.environ, env), \
+                    patch.object(sys, 'argv', ['build_on_device.py', *argv, 'mesa', 'status']), \
+                    patch.object(build_on_device, 'status', return_value=''):
+                build_on_device.main()
+                self.assertEqual(build_on_device.host.name, 'local-docker')
+                self.assertIsInstance(build_on_device.host, build_on_device.LocalDocker)
+                with self.assertRaisesRegex(SystemExit, 'changes the phone'):
+                    build_on_device.install('mesa')
+
+    # covers: delivery.build-hosts/E1
+    def test_invalid_environment_target_has_a_cli_error(self):
+        with patch.dict(os.environ, {'RUNGIC_BUILD_HOST': 'typo'}), \
+                patch.object(sys, 'argv', ['build_on_device.py', 'mesa', 'status']):
+            with self.assertRaises(SystemExit) as error:
+                build_on_device.main()
+        self.assertEqual(error.exception.code, 2)
+
+
+class LocalDockerTests(unittest.TestCase):
+    def local(self, arch='aarch64', cpus=20, memory_gib=8, existing=False):
+        local = build_on_device.LocalDocker()
+        calls = []
+
+        def command(cmd, timeout, check=True, data=None, stdout=subprocess.PIPE):
+            calls.append((cmd, data))
+            out = b''
+            if ' info ' in cmd:
+                out = json.dumps({'Architecture': arch, 'NCPU': cpus,
+                                  'MemTotal': memory_gib * 1024**3}).encode()
+            elif cmd == 'scutil --proxy':
+                out = SCUTIL.encode()
+            elif ' inspect -f ' in cmd and existing:
+                out = f'{local.image()} true'.encode()
+            return subprocess.CompletedProcess(cmd, 0, out, b'')
+
+        local.ssh = command
+        return local, calls
+
+    # covers: delivery.build-hosts/E1
+    def test_local_transport_streams_binary_input_without_ssh(self):
+        local = build_on_device.LocalDocker()
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, b'ok', b'')) as run:
+            result = local.ssh('docker exec -i rungic-build cat', 15, data=b'\x00payload')
+        self.assertEqual(run.call_args.args[0], ['sh', '-c', 'docker exec -i rungic-build cat'])
+        self.assertEqual(run.call_args.kwargs['input'], b'\x00payload')
+        self.assertEqual(result.stdout, b'ok')
+
+    # covers: delivery.build-hosts/E1, delivery.build-hosts/E6
+    def test_local_image_volume_proxy_and_native_platform_reuse_the_existing_recipe(self):
+        # CPU rendering for non-Qualcomm husky needs LLVM; do not create a second,
+        # smaller Docker recipe that silently drops Mesa's build dependencies.
+        local, calls = self.local()
+        local.ensure()
+        build, archive = next((c, data) for c, data in calls if ' build -q ' in c)
+        self.assertIn('--platform linux/arm64', build)
+        self.assertIn('--build-arg https_proxy=http://host.docker.internal:6152', build)
+        with tarfile.open(fileobj=io.BytesIO(archive)) as context:
+            self.assertEqual(context.extractfile('Dockerfile').read(),
+                             (ROOT / 'tools/pq/arm64-host.Dockerfile').read_bytes())
+        start = next(c for c, _ in calls if ' run -d ' in c)
+        self.assertIn('--platform linux/arm64', start)
+        self.assertIn('-v rungic-build:/root/rungic-build', start)
+        self.assertIn('--name rungic-build', start)
+        local.run('true')
+        self.assertIn('-e https_proxy=http://host.docker.internal:6152', calls[-1][0])
+        before = len(calls)
+        local.ensure()
+        self.assertEqual(len(calls), before)
+
+    # covers: delivery.build-hosts/E1
+    def test_running_local_container_is_reused_without_rebuilding(self):
+        local, calls = self.local(existing=True)
+        local.ensure()
+        self.assertFalse(any(' build -q ' in c or ' run -d ' in c for c, _ in calls))
+
+    # covers: delivery.build-hosts/E1
+    def test_docker_vm_resources_bound_default_and_explicit_parallelism(self):
+        # The Studio has 20 CPUs but Docker has only 8 GiB: compiling LLVM/Mesa
+        # at -j20 can exhaust the VM even though the host has 128 GiB.
+        # With 64 GiB the VM can feed every CPU, so no fixed cap may throttle the build.
+        for cpus, memory, want in [(20, 8, 4), (20, 4, 2), (2, 8, 2), (20, 1, 1), (20, 64, 20)]:
+            with self.subTest(cpus=cpus, memory=memory):
+                local, _ = self.local(cpus=cpus, memory_gib=memory)
+                self.assertEqual(local.jobs, want)
+        local, _ = self.local()
+        with patch.object(build_on_device, 'host', local), patch.object(local, 'background') as background:
+            build_on_device.start('mesa', 'targets', 20)
+            self.assertIn('ninja -C /root/rungic-build/mesa/build -j 4', background.call_args.args[1])
+            build_on_device.start('mesa', 'targets', 2)
+            self.assertIn('ninja -C /root/rungic-build/mesa/build -j 2', background.call_args.args[1])
+
+    # covers: delivery.build-hosts/E1
+    def test_local_target_refuses_emulation_and_invalid_resources_before_building(self):
+        for args in [{'arch': 'x86_64'}, {'cpus': 0}, {'memory_gib': 0}]:
+            with self.subTest(args=args):
+                local, calls = self.local(**args)
+                with self.assertRaises(build_on_device.rungic_device.DeviceError):
+                    local.ensure()
+                self.assertFalse(any(' build -q ' in c or ' run -d ' in c for c, _ in calls))
+
+    # covers: delivery.build-hosts/E1
+    def test_adreno_owners_remote_parallelism_and_invalid_job_requests(self):
+        with patch.object(build_on_device, 'host', FakeMac()):
+            self.assertEqual(build_on_device.build_jobs(), 10)
+            self.assertEqual(build_on_device.build_jobs(12), 12)
+            for jobs in (0, -1):
+                with self.subTest(jobs=jobs), self.assertRaisesRegex(SystemExit, 'positive'):
+                    build_on_device.build_jobs(jobs)
+
+    # covers: delivery.build-hosts/E1, delivery.packaging/E5
+    def test_project_and_sdk_packages_use_local_docker_and_bounded_jobs(self):
+        # Task 3.2 builds project packages too; the SDK-based Flatpak GL package
+        # must not force husky contributors back onto the author's Mac mini.
+        import rungic_package
+        local, _ = self.local()
+        for image in (None, 'example/sdk:aarch64'):
+            with self.subTest(image=image), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                pkg = {'name': 'rungic-test', 'dir': root / 'packaging/rungic-test',
+                       'architecture': 'arm64', 'image': image}
+                calls = []
+
+                def run(script, timeout=120, check=True):
+                    calls.append(script)
+                    if 'build-run.sh' in script:
+                        raise RuntimeError('captured build script')
+                    return subprocess.CompletedProcess([], 0, '', '')
+
+                def sdk(cmd, timeout, **kwargs):
+                    calls.append(cmd)
+                    return subprocess.CompletedProcess([], 0, b'exit=0\n', b'')
+
+                with patch.object(build_on_device, 'host', local), \
+                        patch.object(build_on_device, 'expire'), patch.object(local, 'run', run), \
+                        patch.object(local, 'put_tar'), patch.object(local, 'put'), \
+                        patch.object(local, 'ssh', sdk), \
+                        patch.object(rungic_package, 'WORKSPACE', root), \
+                        patch.object(rungic_package, 'stage_sources', return_value='archive'), \
+                        patch.object(rungic_package, 'maintainer_scripts'), \
+                        patch.object(rungic_package, 'unit_list', return_value=''), \
+                        patch.object(rungic_package, 'git', return_value='1770000000'):
+                    # Cache the VM limit before replacing the transport for the SDK.
+                    local._jobs = 4
+                    with self.assertRaisesRegex(RuntimeError, 'captured build script'):
+                        rungic_package.build_device(pkg, None, jobs=20)
+                script = next(c for c in calls if 'build-run.sh' in c)
+                self.assertIn('JOBS=4 ', script)
+                if image:
+                    command = next(c for c in calls if 'docker run --rm' in c)
+                    self.assertIn('--platform linux/arm64', command)
+                    self.assertIn('-e JOBS=4 ', command)
+                    self.assertIn('--volumes-from rungic-build', command)
+
+
 class LocalHost:
     """A build host whose container is this machine: scripts run here with sh, BASE under a temp dir."""
     name, jobs = 'local', 2
@@ -170,6 +350,30 @@ class IncrementalSyncTests(unittest.TestCase):
         path = self.staged / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+
+    # covers: delivery.build-hosts/E2, apps.gpu/E5
+    def test_cached_mesa_build_picks_up_cpu_rendering_options(self):
+        # Contributors may already have a KGSL-only build tree. Adding llvmpipe
+        # to the source options must reconfigure that tree, or husky still gets no GL.
+        work = self.base / 'mesa'
+        (work / 'build').mkdir(parents=True)
+        (work / 'configure.args').write_text('-Dllvm=disabled\n')
+        (work / 'meson-options').write_text((ROOT / 'desktop/mesa-meson-options').read_text())
+        meson = self.root / 'bin/meson'
+        meson.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > configure.args\n')
+        meson.chmod(0o755)
+        ninja = self.root / 'bin/ninja'
+        ninja.write_text('#!/bin/sh\ngrep -qx -- -Dllvm=enabled configure.args\n')
+        ninja.chmod(0o755)
+        for cached in (False, True):
+            with self.subTest(cached=cached):
+                if cached:
+                    (work / 'build/build.ninja').write_text('cached KGSL build')
+                (work / 'configure.args').write_text('-Dllvm=disabled\n')
+                build_on_device.start('mesa', 'targets', 2)
+                build_on_device.host.run(build_on_device.host.steps)
+                args = (work / 'configure.args').read_text()
+                self.assertEqual('--reconfigure' in args, cached)
 
     # covers: delivery.build-hosts/E2
     def test_unchanged_files_keep_their_time_and_the_obj_tree_stays(self):
@@ -230,7 +434,10 @@ class IncrementalSyncTests(unittest.TestCase):
                 build_on_device.host.run(build_on_device.host.steps)
                 self.assertEqual((src / 'packaged').read_text(), 'updated source\n')
                 # Reusing the same tree must compile a subsequent source change too.
-                time.sleep(0.01)
+                # macOS make 3.81 compares whole seconds; give the fixture an
+                # older output rather than relying on a 10 ms scheduling delay.
+                old = time.time() - 2
+                os.utime(obj / 'output', (old, old))
                 (src / 'input').write_text('second revision\n')
                 build_on_device.host.run(build_on_device.host.steps)
                 self.assertEqual((src / 'packaged').read_text(), 'second revision\n')

@@ -78,15 +78,15 @@ features:
     docs: [docs/97-local-development-deploy.md]
 
   - id: delivery.build-hosts
-    title: 在 Mac mini 或手机上构建 ARM64 包
+    title: 在本机 Docker、远程 Mac 或手机上构建 ARM64 包
     scenario: delivery.try-on-phone
     status: live
     platform: linux
     interfaces: []
-    summary: 设备包和上游组件在 Mac mini 的 Ubuntu 26.04 ARM64 容器里构建（手机为后备），产物进发布或开发仓库。
+    summary: 设备包和上游组件复用 Ubuntu 26.04 ARM64 Docker 镜像，可选择本机或配置远程 Mac（手机为后备），产物进发布或开发仓库。
     experience:
       - id: E1
-        text: 默认构建机是 Mac mini，速度远快于手机：KWin 含 LTO 的完整构建约 6 分钟，手机上一小时以上；构建期间手机不受影响。
+        text: 默认仍用原作者的 Mac mini，可用 RUNGIC_BUILD_SSH 或 --ssh-host 配置远程地址，用 --host local-docker 在本机原生 ARM64 Docker 构建；本机并行度受 VM CPU、每 2 GiB 内存一个任务和最多 4 个任务限制，构建期间手机不受影响。
         device: 构建耗时取决于 Mac mini 与手机的硬件，只能在两台机器上实测；默认构建机和不碰手机由单元测试检查
         evidence:
           - {doc: docs/71-upstream-patch-queue.md, date: 2026-09-27, note: "§构建机：Mac mini"}
@@ -108,7 +108,7 @@ features:
         evidence:
           - {doc: docs/71-upstream-patch-queue.md, date: 2026-09-27, note: "plasma-settings、libcamera 一致；qmlcachegen AOT 与 IPA 签名差异已解释"}
       - id: E6
-        text: 构建容器里每条联网命令都带上 Mac mini 的系统代理（scutil 读取，以 host.docker.internal 代替本机地址）。
+        text: 本机与远程 Mac 的构建容器每条联网命令都带上所在 Mac 的系统代理（scutil 读取，以 host.docker.internal 代替本机地址）。
     pitfalls:
       - text: 经 ssh 执行的命令和 Docker 容器都不会自动使用 Mac mini 的系统代理（Surge 127.0.0.1:6152），要显式传入；容器 DNS 把 macmini.wire.net 解析成公网地址，手机直连要用 10.77.0.20 或 192.168.5.45。
         docs: [AGENTS.md, docs/71-upstream-patch-queue.md]
@@ -125,7 +125,7 @@ features:
       - tools/pq/arm64-host-packages.txt
       - tools/pq/rungic-transfer
       - tools/test_build_on_device.py
-    docs: [docs/71-upstream-patch-queue.md, docs/53-remote-system-development.md]
+    docs: [docs/71-upstream-patch-queue.md, docs/53-remote-system-development.md, docs/108-husky-port.md]
 
   - id: delivery.dev-env
     title: 开发环境一条命令就绪

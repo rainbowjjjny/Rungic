@@ -170,6 +170,12 @@ plasma-keyboard、xdg-desktop-portal-kde、wl-clipboard、arc-cua、LiteRT、lib
 
 手机与Mac mini在同一局域网（192.168.5.60与192.168.5.45，也可经wire.net的10.77.0.x互通），大文件由手机直接传给构建机，不经本机与VPN：手机容器的专用密钥`/root/.ssh/id_ed25519_buildhost`在Mac的`authorized_keys`中受限为`restrict`、只接受手机的两个地址、强制命令为构建容器里的`tools/pq/rungic-transfer`（`put DIR`解包到、`get FILE`读取`/root/rungic-build`下的路径，拒绝绝对路径与`..`）。实测6.8 MB/s（经本机转发约1.2 MB/s），其他命令与路径被拒绝。崩溃符号化已改用此路径。2026-10-03起手机依次尝试wire.net（`10.77.0.20`）与局域网地址（`MacMini.PHONE_HOSTS`），实测两条都约12 MB/s；开发部署的包也由手机直接取（docs/97）。
 
+### 构建端选择补充（2026-10-04）
+
+`tools/build_on_device.py --host local-docker` 在当前机器的原生 ARM64 Docker 中复用上述镜像、缓存卷和传输校验；`tools/build_mesa.py` 与 `tools/rungic_package.py build` 也接受该目标。可用 `RUNGIC_BUILD_HOST=local-docker` 统一选择。编译并行度按 Docker VM 的 CPU 和内存限制，而非宿主硬件：最多 4 个任务，每 2 GiB 一个任务，显式 `--jobs` 可降低上限。x86 Docker daemon 会在构建前被拒绝，不自动改走 QEMU。
+
+远程 Mac 路径仍以原作者 `choukevin@macmini.wire.net` 为默认地址，用 `RUNGIC_BUILD_SSH=builder@host` 配置自己的地址；`build_on_device.py --host macmini --ssh-host builder@host` 可临时覆盖。两条 Docker 路径都读取所在 Mac 的 `scutil --proxy`，给镜像构建和容器命令显式传入代理。本补充只验证离线工具行为，本机镜像创建与构建验收见 [husky 3.1 记录](108-husky-port.md#任务-31本机-arm64-docker-与可配置远程构建端)。
+
 ## Android宿主与配置源码收尾（2026-09-30）
 
 原先直接维护的`native/plasma`与`plasma/firefox-mobile`也已进入配方流程，见[73篇收尾记录](73-reduce-upstream-changes.md#remaining-source-trees-migrated-2026-09-30)。git类型配方可用`subdir`选取固定提交中的子树，此时`tree`为子树哈希；可用`exclude`显式排除随上游入库的非构建内容，升级后排除项不存在会报错。所有实际源码仍只在`.work`展开。

@@ -2,7 +2,7 @@
 --libdir=lib/aarch64-linux-gnu
 --wrap-mode=nofallback
 -Dplatforms=x11,wayland
--Dgallium-drivers=freedreno,zink
+-Dgallium-drivers=freedreno,zink,softpipe,llvmpipe
 -Dgallium-va=disabled
 -Dvulkan-drivers=freedreno
 -Dvulkan-layers=
@@ -16,5 +16,5 @@
 -Dvalgrind=disabled
 -Dgles1=disabled
 -Dfreedreno-kmds=kgsl
--Dllvm=disabled
+-Dllvm=enabled
 -Dbuildtype=release
