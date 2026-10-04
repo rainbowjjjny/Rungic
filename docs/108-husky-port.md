@@ -18,7 +18,7 @@
 - Root：Magisk 31.0（`Magisk-v31.0.apk` SHA-256 `2c8a488b9a5293e578e95ae4f07e3c57aba4feec4a52ca4dd852a2692d6dd4e8`），修补后的 `init_boot` 已刷入 `init_boot_b`。
 - 编译机：GCP `rungic-kernel-build`（asia-northeast1-b，c3-standard-22，86 GB 内存，400 GB SSD，Ubuntu 24.04）。不用时停机。
 - SELinux 保持 Enforcing；不改 vbmeta；不刷 `super`；不清数据。
-- 写设备授权：用户 2026-10-04 授权 Claude 自行决定刷写（`boot`、`init_boot` 等可用原厂镜像回退的分区），不必逐次询问。仍须遵守：新镜像先 `fastboot boot` 临时启动验证、通过后才刷入；刷入前确认回退镜像在手；**会清除数据的操作（擦 userdata/metadata、刷 super、改 vbmeta 标志）仍须先问用户**。
+- 写设备授权：用户 2026-10-04 授权 Claude 自行决定刷写（`boot`、`init_boot` 等可用原厂镜像回退的分区），不必逐次询问。仍须遵守：新镜像先 `fastboot boot` 临时启动验证、通过后才刷入；刷入前确认回退镜像在手；用户 2026-10-04 进一步说明：手机上没有用户数据，清数据的操作（擦 userdata/metadata、刷 super、改 vbmeta 标志）也授权 Claude 自行执行；执行前仍须确认有回退所需的原厂镜像（`.work/husky/stock/` 与出厂包），并在本文“记录”中写明做了什么。
 - 回退：`fastboot flash boot_<slot> <stock boot.img>`；`fastboot flash init_boot_<slot> <stock init_boot.img>` 去掉 root。每次写入前重新读取当前槽位，不写死 `_b`。
 - 文件位置（AGENTS.md:108）：工作输入与产物一律在 `.work/husky/`；`~/projects/pixel8-firmware/` 只作为用户自己的原始备份，工具不直接读它。
 - 设备命令：root 命令用 stdin 喂给 `su`（`adb -s <serial> shell su < script.sh`），不用多层 `su -c` 引号；namespace 检查用 Magisk 的 `/data/adb/magisk/busybox`，不依赖 Android 自带工具。
