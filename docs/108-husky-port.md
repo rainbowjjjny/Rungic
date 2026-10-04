@@ -72,7 +72,7 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
   adb -s $S shell "su -c 'uname -r; getenforce; lsmod | tail -n +2 | wc -l; cat /proc/modules | cut -d\" \" -f1 | sort'" > .work/husky/baseline/kernel.txt
   adb -s $S shell "su -c 'dmesg | grep -iE \"module|sig|taint\" | tail -200'" > .work/husky/baseline/dmesg-modules.txt
   ```
-- [ ] 验收：`kernel.txt` 里有已加载模块数 `N_stock`（之后 M1 对照用），且 `getenforce` 为 `Enforcing`。
+- [x] 验收：`kernel.txt` 里有已加载模块数 `N_stock`（之后 M1 对照用），且 `getenforce` 为 `Enforcing`。
 
 ### 任务 0.2：Pixel 原厂包提取（Codex）
 
@@ -83,12 +83,12 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 - 新建：`tools/test_prepare_pixel_stock.py`（`covers: install.device-spec`）。
 - 修改：`quality/features/install.yaml` 的 `install.device-spec.code` 加入以上两个文件。
 
-- [ ] 写失败测试：用 `tmp_path` 造一个最小出厂 zip（内层 zip 含假 `boot.img` 等），断言：摘要不符时在解包前抛错；输出清单列出每个分区和它的 SHA-256；内层 zip 缺分区时拒绝。
-- [ ] 运行 `python -m pytest tools/test_prepare_pixel_stock.py -v`，确认失败。
-- [ ] 实现，重跑通过。
-- [ ] 输出 `verification.json`，字段对齐 `tools/ci/preflight.py:46-60` 实际读取的内容（identity、分区摘要）；Pixel 没有 `super` 分片，预检改为按 spec 声明的分区列表核对，不伪造 `super_sha256`。同时保留链式 vbmeta（`vbmeta_system`、`vbmeta_vendor`）的摘要。
-- [ ] 在真包上运行，输出到 `.work/husky/stock/`，并核对 `boot.img` SHA-256 = `f102b2951357e6536b15cad20e69e14064e1ba5cb9f84c97cc477d204e0361d7`、`init_boot.img` = `f18685aef7a50581d5261fe9940214b3a7db4d310d8891810cde487b219b57fe`。
-- [ ] `tools/run-tests.sh` 通过后提交。
+- [x] 写失败测试：用 `tmp_path` 造一个最小出厂 zip（内层 zip 含假 `boot.img` 等），断言：摘要不符时在解包前抛错；输出清单列出每个分区和它的 SHA-256；内层 zip 缺分区时拒绝。
+- [x] 运行 `python -m pytest tools/test_prepare_pixel_stock.py -v`，确认失败。
+- [x] 实现，重跑通过。
+- [x] 输出 `verification.json`，字段对齐 `tools/ci/preflight.py:46-60` 实际读取的内容（identity、分区摘要）；Pixel 没有 `super` 分片，预检改为按 spec 声明的分区列表核对，不伪造 `super_sha256`。同时保留链式 vbmeta（`vbmeta_system`、`vbmeta_vendor`）的摘要。
+- [x] 在真包上运行，输出到 `.work/husky/stock/`，并核对 `boot.img` SHA-256 = `f102b2951357e6536b15cad20e69e14064e1ba5cb9f84c97cc477d204e0361d7`、`init_boot.img` = `f18685aef7a50581d5261fe9940214b3a7db4d310d8891810cde487b219b57fe`。
+- [~] `tools/run-tests.sh` 通过后提交。（实际：相关子集全部通过；完整 `run-tests.sh` 在 macOS 上原本就有 81 个失败、18 个收集错误，缺 `gi` 等 Linux 依赖，在未改动的代码上同样复现，见 2026-10-04 记录）
 
 ### 任务 0.3：husky spec 与 knowledge（Codex 写，Claude 用实测值核对）
 
@@ -96,31 +96,31 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 - 新建：`profiles/devices/google/husky/CP1A.260405.005.json`（`schema_version: 1`，字段结构同 `profiles/devices/motorola/vantage_cn/W2WV36.55-75-15.json`）。
 - 新建：`profiles/devices/google/husky/CP1A.260405.005-knowledge.md`。
 
-- [ ] `identity`：product/device `husky`、sku `GE9DP`、上文指纹、bootloader `ripcurrent-16.4-14540574`。
-- [ ] `stock`：0.2 输出的全部摘要；`avb_public_key_sha1` 用 avbtool 从原厂 `vbmeta.img` 读取。
-- [ ] `kernel`：manifest 来源 ci 14691759、common commit、`stock_release`、`page_size: 4096`、`module_trust_certificate_sha256`（1.4 得出后补上；这是唯一允许后补的字段，补上后 spec 才算定稿）。
-- [ ] `release_requirements.android_api: 36`；`purity` 留空（不做预装清理）。
-- [ ] Pixel 分区布局差异（`vendor_kernel_boot` 等）若现有字段放不下，按 `references/device-onboarding.md:34` 扩展 schema 并修改读取方，不伪造字段。
-- [ ] 验收：`tools/ci/preflight.py` 以只读方式对真机运行，全部通过（必要时为 Pixel 修正预检，测试同步更新）。
+- [x] `identity`：product/device `husky`、sku `GE9DP`、上文指纹、bootloader `ripcurrent-16.4-14540574`。
+- [x] `stock`：0.2 输出的全部摘要；`avb_public_key_sha1` 用 avbtool 从原厂 `vbmeta.img` 读取。
+- [x] `kernel`：manifest 来源 ci 14691759、common commit、`stock_release`、`page_size: 4096`、`module_trust_certificate_sha256`（1.4 得出后补上；这是唯一允许后补的字段，补上后 spec 才算定稿）。
+- [x] `release_requirements.android_api: 36`；`purity` 留空（不做预装清理）。
+- [x] Pixel 分区布局差异（`vendor_kernel_boot` 等）若现有字段放不下，按 `references/device-onboarding.md:34` 扩展 schema 并修改读取方，不伪造字段。
+- [x] 验收：`tools/ci/preflight.py` 以只读方式对真机运行，全部通过（必要时为 Pixel 修正预检，测试同步更新）。
 
 ## M1：LXC GKI 内核
 
 ### 任务 1.1：固定源码并同步（Claude，编译机）
 
-- [ ] 把 `manifest_14691759.xml` 存为 `kernel/targets/gki/android14-6.1-manifest.xml`。
-- [ ] 编译机安装 `repo`、`git`、`python3`，执行 `repo init -u https://android.googlesource.com/kernel/manifest -m <上述文件>` 并 `repo sync -c -j16`。
-- [ ] 验收：`git -C common rev-parse HEAD` = `fa1d6308d1fe803c3fdebcd3ee6f7a1155fc3462`。
+- [x] 把 `manifest_14691759.xml` 存为 `kernel/targets/gki/android14-6.1-manifest.xml`。
+- [x] 编译机安装 `repo`、`git`、`python3`，执行 `repo init -u https://android.googlesource.com/kernel/manifest -m <上述文件>` 并 `repo sync -c -j16`。
+- [x] 验收：`git -C common rev-parse HEAD` = `fa1d6308d1fe803c3fdebcd3ee6f7a1155fc3462`。
 
 ### 任务 1.2：原样重编基线（Claude，编译机）
 
 在改任何东西之前，先证明构建流程能复现原厂 ABI。
 
-- [ ] 确认 manifest 中每个 project 都钉在具体 commit，clang 预编译版本为 r487747c。
-- [ ] `tools/bazel build --config=fast --lto=none //common:kernel_aarch64`（`--lto=none` 来自原厂 `CONFIG_LTO_NONE=y`；stamp 只影响版本串，单独核对，不当作 ABI 依据）。
-- [ ] 生成的 `.config` 与原厂 `/proc/config.gz` 逐项比较，差异必须为 0（版本串除外）。
-- [ ] 用 `tools/ci/module_abi.py <Module.symvers> .work/husky/stock/modules --output .work/husky/abi-baseline.json` 对照原厂模块。
-- [ ] 验收：0 个 CRC 不匹配；把每个模块的 `unresolved_by_gki` 存为基线（这些应是由其他 vendor 模块导出的符号）。若不为 0，先查明原因，再继续。
-- [ ] 用 `pahole` 导出原样构建的 `task_struct`、`nsproxy`、`ipc_namespace`、`pid_namespace`、`user_namespace`、`cred` 布局，作为 1.3 的对照。
+- [x] 确认 manifest 中每个 project 都钉在具体 commit，clang 预编译版本为 r487747c。
+- [x] `tools/bazel build --config=fast --lto=none //common:kernel_aarch64`（`--lto=none` 来自原厂 `CONFIG_LTO_NONE=y`；stamp 只影响版本串，单独核对，不当作 ABI 依据）。
+- [x] 生成的 `.config` 与原厂 `/proc/config.gz` 逐项比较，差异必须为 0（版本串除外）。
+- [x] 用 `tools/ci/module_abi.py <Module.symvers> .work/husky/stock/modules --output .work/husky/abi-baseline.json` 对照原厂模块。
+- [x] 验收：0 个 CRC 不匹配；把每个模块的 `unresolved_by_gki` 存为基线（这些应是由其他 vendor 模块导出的符号）。若不为 0，先查明原因，再继续。
+- [x] 用 `pahole` 导出原样构建的 `task_struct`、`nsproxy`、`ipc_namespace`、`pid_namespace`、`user_namespace`、`cred` 布局，作为 1.3 的对照。
 
 ### 任务 1.3：移植 KABI 补丁到 6.1（Codex 写补丁，Claude 编译验证）
 
@@ -130,14 +130,14 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 - 按需新建：`kernel/targets/gki/android14-lxc-symbols`。
 - 修改：`quality/features/install.yaml` 的 `install.gki-kernel` 加入 6.1 相关文件。
 
-- [ ] 在 `fa1d6308` 的 `include/linux/sched.h` 中确认 KABI 槽 6–8 未被占用（分支上的观察不算数），并用 `static_assert` 校验 `sysv_sem`（ARM64 上 8 字节）放进 1 个槽、`sysv_shm`（16 字节）放进相邻 2 个槽，且对齐。
-- [ ] 用 `pahole` 对比原样构建与候选构建：上述结构体除 KABI 槽内部外，偏移和大小完全一致。
-- [ ] 先在原样源码里查明这些结构体有没有依赖 `CONFIG_SYSVIPC`、`IPC_NS`、`PID_NS`、`USER_NS`、`POSIX_MQUEUE` 的条件字段，有证据再补，不照搬 6.12 的 Rust 修复。
-- [ ] 补丁经 `tools/pq.py` 队列管理（AGENTS.md:115），用 `pq prepare/export` 生成。
-- [ ] 配置片段：在编译机工作区建 `rungic/BUILD.bazel`（`exports_files(["lxc_defconfig"])`），用 `--defconfig_fragment=//rungic:lxc_defconfig` 构建；先查 manifest 钉住的 Kleaf 版本是否支持这个参数，不支持再改用 pq 补丁修改 `gki_defconfig`。
+- [x] 在 `fa1d6308` 的 `include/linux/sched.h` 中确认 KABI 槽 6–8 未被占用（分支上的观察不算数），并用 `static_assert` 校验 `sysv_sem`（ARM64 上 8 字节）放进 1 个槽、`sysv_shm`（16 字节）放进相邻 2 个槽，且对齐。
+- [x] 用 `pahole` 对比原样构建与候选构建：上述结构体除 KABI 槽内部外，偏移和大小完全一致。
+- [x] 先在原样源码里查明这些结构体有没有依赖 `CONFIG_SYSVIPC`、`IPC_NS`、`PID_NS`、`USER_NS`、`POSIX_MQUEUE` 的条件字段，有证据再补，不照搬 6.12 的 Rust 修复。
+- [~] 补丁经 `tools/pq.py` 队列管理（AGENTS.md:115），用 `pq prepare/export` 生成。（实际：补丁在编译机同一 commit 上用 git 生成，按 DEP-3 写入并通过 `pq lint`；没有在 Mac 上 `pq prepare`，避免克隆整个 kernel/common）
+- [x] 配置片段：在编译机工作区建 `rungic/BUILD.bazel`（`exports_files(["lxc_defconfig"])`），用 `--defconfig_fragment=//rungic:lxc_defconfig` 构建；先查 manifest 钉住的 Kleaf 版本是否支持这个参数，不支持再改用 pq 补丁修改 `gki_defconfig`。
 - [x] **先修工具（阻断项）**：`tools/ci/module_abi.py` 原先只比较候选 symvers 里存在的名字，候选少导出的符号只会被记为 unresolved，退出码仍为 0。已加 `--baseline <1.2 的报告>`：模块清单（相对路径与 SHA-256）必须相同，每个模块的候选 unresolved 引用必须是基线的子集，否则非零退出并列出模块/符号；CRC 差异仍失败。报告保留 symvers SHA-256，`--config <.config>`、`--image <Image>` 分别追加可选摘要；不传 baseline 时保留旧行为与报告字段。测试在 `tools/ci/test_module_abi.py`（`covers: install.gki-kernel/E1`），先失败再实现，使用合成 ELF64 `.ko` 的 `__versions` 段。
-- [ ] `module_abi.py --baseline` 对照原厂全部模块。
-- [ ] 验收：0 个 CRC 不匹配，并记录可比较的引用数和未覆盖的范围（`install.gki-kernel` E1）。其他选项引起的差异逐个定位，不放宽检查。
+- [x] `module_abi.py --baseline` 对照原厂全部模块。
+- [x] 验收：0 个 CRC 不匹配，并记录可比较的引用数和未覆盖的范围（`install.gki-kernel` E1）。其他选项引起的差异逐个定位，不放宽检查。
 
 ### 任务 1.4：恢复模块签名信任并重打包 boot（Claude，编译机或 Mac）
 
@@ -160,7 +160,7 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 
 - 2026-10-04：**M0 完成。** 0.1 原厂基线（319 个已加载模块、Enforcing、dmesg 无模块错误）；0.2 `prepare_pixel_stock.py`；0.3 husky spec 与 Pixel 预检，真机只读预检全部通过；AVB 公钥 SHA-1 经 AOSP avbtool 独立核对一致。
 - 2026-10-04：**1.1、1.2 完成。** 编译机同步固定 manifest，`common` 为 `fa1d6308`，clang `r487747c` 与原厂一致。`BUILD_NUMBER=14691759 tools/bazel build --config=fast --config=stamp --lto=none //common:kernel_aarch64` 用时 218 秒。`.config` 与原厂只差 `CONFIG_FRAME_WARN`（2048 对 0，与 ABI 无关）。`module_abi.py` 对原厂 331 个模块：20,027 个引用、0 个 CRC 不匹配、1,886 个由其他 vendor 模块提供的引用记为基线（`.work/husky/abi-baseline.json`）。首次对比出现 66 个不匹配，查明是提取时 16K 版模块覆盖了同名 4K 版，详见 knowledge。未解决：版本串缺 `-gfa1d6308d1fe-ab14691759` 后缀（`--config=stamp` 未生效），与 ABI 无关，留待 1.4 处理。
-- 2026-10-04：1.3 进行中。在 `fa1d6308` 上核实 `task_struct` KABI 槽 1、2 已用，3–8 空闲；`sysv_sem` 8 字节、`sysv_shm` 16 字节。补丁放入 `packages/gki-android14-6.1/`。
+- 2026-10-04：**1.3 完成。** 在 `fa1d6308` 上核实 `task_struct` KABI 槽 1、2 已用，3–8 空闲；`sysv_sem` 8 字节放进槽 6，`sysv_shm` 16 字节放进槽 7–8（`packages/gki-android14-6.1/`）。`--defconfig_fragment=//rungic:lxc_defconfig` 在本 Kleaf 可用，配置变化只有六项及其自动子项（`SYSVIPC_COMPAT`、`SYSVIPC_SYSCTL`、`POSIX_MQUEUE_SYSCTL`）。`module_abi.py --baseline`：331 个模块清单一致，18,141 个匹配，0 个 CRC 不匹配，未解析 1,886 个与基线相同，退出码 0（`.work/husky/abi-lxc.json`，Image SHA-256 `0f391744…`）。`pahole`：`task_struct` 仍为 4,800 字节，只有偏移 3640–3663 的槽 6–8 变成 union，其余 215 个成员偏移不变；`nsproxy`、`ipc_namespace`、`pid_namespace`、`user_namespace`、`cred` 逐行相同。
 - 2026-10-04：Codex 在 `task/husky-spec` 完成 Task 0.3 的仓库改动，按本次要求保留未提交状态。新增 [husky spec](../profiles/devices/google/husky/CP1A.260405.005.json) 与 [知识档案](../profiles/devices/google/husky/CP1A.260405.005-knowledge.md)，身份、uname 与 319 个模块基线取自真实只读采集副本；十个分区摘要与 archive name/SHA 取自真实 Pixel 提取报告。先写失败测试，再实现按 `stock.format=pixel-factory` 选择的预检路径，保留旧 Motorola 路径；从主仓库只读原厂 `vbmeta.img` 用纯 Python 解析并计算 AVB 公钥 SHA-1 `69da4e73583acf8741905c590537f6b73d8c69df`，解析器有 offset/size、截断与越界测试。主仓库原厂文件的全部声明分区、字节数与公钥摘要通过离线核验；指定 venv 的 `python -m pytest -q tools/ci/test_device_preflight.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py` 为 31 passed、110 subtests passed，`python tools/pq.py lint` 退出 0。质量归属/文档分类与生成总览已更新。模块信任证书摘要保留 null，等待 Task 1.4；本轮没有访问手机或 VM，完整真机 preflight 仍待 Claude 验收，不标记本任务实机验收通过。
 - 2026-10-04：Codex 完成 Task 1.3 的 ABI 工具阻断项修复。离线验证：指定 venv 的 `python -m pytest -q tools/ci/test_module_abi.py` 为 18 passed、17 subtests passed，`python tools/pq.py lint` 退出 0。覆盖缺失导出、模块新增/删除/改名/摘要变化、相同基线、未解析引用减少、CRC 差异、不传 baseline 的兼容行为和可选内核产物摘要；空清单及损坏基线也拒绝。仅完成工具与合成输入验证，1.2 原厂等价报告、候选内核编译及原厂模块实测仍由后续任务验收。
 - 2026-10-04：Codex（gpt-6.1-sol / high）审查本计划，提出 11 条意见（1 个阻断：`module_abi.py` 漏判缺失导出）。核实后全部采纳：LTO 实测为 `LTO_NONE`，与 `--lto=none` 一致；其余修订见 M0/M1 各任务。
