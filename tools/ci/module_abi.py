@@ -69,11 +69,47 @@ def module_versions(path):
     return result
 
 
+def baseline_failures(reports, path):
+    baseline = json.loads(path.read_text())
+    if (not isinstance(baseline, dict) or not isinstance(baseline.get("modules"), list)
+            or not baseline["modules"]):
+        raise ValueError(f"{path}: invalid baseline module inventory")
+    stock = {}
+    for item in baseline["modules"]:
+        if (not isinstance(item, dict) or not isinstance(item.get("module"), str)
+                or not isinstance(item.get("sha256"), str)
+                or not isinstance(item.get("unresolved_by_gki"), list)
+                or any(not isinstance(name, str) for name in item["unresolved_by_gki"])):
+            raise ValueError(f"{path}: invalid baseline module record: {item}")
+        name = item["module"]
+        if name in stock:
+            raise ValueError(f"{path}: duplicate baseline module: {name}")
+        stock[name] = item
+    candidate = {item["module"]: item for item in reports}
+    failures = []
+    for name in sorted(stock.keys() - candidate.keys()):
+        failures.append(f"module inventory: missing module {name}")
+    for name in sorted(candidate.keys() - stock.keys()):
+        failures.append(f"module inventory: added module {name}")
+    for name in sorted(stock.keys() & candidate.keys()):
+        if candidate[name]["sha256"] != stock[name]["sha256"]:
+            failures.append(f"module inventory: {name}: sha256 differs from baseline")
+        unresolved = (set(candidate[name]["unresolved_by_gki"])
+                      - set(stock[name]["unresolved_by_gki"]))
+        if unresolved:
+            failures.append(f"{name}: new unresolved symbols: {', '.join(sorted(unresolved))}")
+    return failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("symvers", type=Path)
     parser.add_argument("modules", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--baseline", type=Path,
+                        help="stock-equivalent report; require identical modules and no new unresolved symbols")
+    parser.add_argument("--config", type=Path, help="kernel .config to bind by SHA-256")
+    parser.add_argument("--image", type=Path, help="kernel Image to bind by SHA-256")
     args = parser.parse_args()
     expected = {}
     for line in args.symvers.read_text().splitlines():
@@ -82,7 +118,7 @@ def main():
             raise ValueError(f"invalid Module.symvers line: {line}")
         expected[fields[1]] = int(fields[0], 16)
     modules = sorted(args.modules.rglob("*.ko"))
-    if not modules:
+    if not modules and not args.baseline:
         raise ValueError("no OEM modules found")
     reports = []
     for module in modules:
@@ -106,10 +142,21 @@ def main():
               "mismatch_count": sum(len(item["mismatch"]) for item in reports),
               "unresolved_count": sum(len(item["unresolved_by_gki"]) for item in reports),
               "modules": reports}
+    for name in ("config", "image"):
+        path = getattr(args, name)
+        if path is not None:
+            report[f"{name}_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    failures = baseline_failures(reports, args.baseline) if args.baseline else []
+    for item in reports:
+        for name, crcs in item["mismatch"].items():
+            failures.append(f"{item['module']}: CRC mismatch for {name}: "
+                            f"OEM {crcs['oem_crc']}, candidate {crcs['built_crc']}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({key: value for key, value in report.items() if key != "modules"}, indent=2))
-    if report["mismatch_count"]:
+    if failures:
+        print("module ABI check failed:\n" + "\n".join(f"  {failure}" for failure in failures),
+              file=sys.stderr)
         sys.exit(1)
 
 

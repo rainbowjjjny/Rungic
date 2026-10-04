@@ -135,7 +135,7 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 - [ ] 先在原样源码里查明这些结构体有没有依赖 `CONFIG_SYSVIPC`、`IPC_NS`、`PID_NS`、`USER_NS`、`POSIX_MQUEUE` 的条件字段，有证据再补，不照搬 6.12 的 Rust 修复。
 - [ ] 补丁经 `tools/pq.py` 队列管理（AGENTS.md:115），用 `pq prepare/export` 生成。
 - [ ] 配置片段：在编译机工作区建 `rungic/BUILD.bazel`（`exports_files(["lxc_defconfig"])`），用 `--defconfig_fragment=//rungic:lxc_defconfig` 构建；先查 manifest 钉住的 Kleaf 版本是否支持这个参数，不支持再改用 pq 补丁修改 `gki_defconfig`。
-- [ ] **先修工具（阻断项）**：`tools/ci/module_abi.py:90` 只比较候选 symvers 里存在的名字，候选少导出的符号只会被记为 unresolved，退出码仍为 0。给它加 `--baseline <1.2 的报告>`：模块清单必须相同，候选不能比基线多出任何 unresolved 引用，否则非零退出；报告里绑定 symvers、`.config`、`Image` 的 SHA-256。写在 `tools/ci/test_module_abi.py`（`covers: install.gki-kernel/E1`），先写失败测试：造一个候选 symvers 缺少某符号的场景，断言退出码非零。
+- [x] **先修工具（阻断项）**：`tools/ci/module_abi.py` 原先只比较候选 symvers 里存在的名字，候选少导出的符号只会被记为 unresolved，退出码仍为 0。已加 `--baseline <1.2 的报告>`：模块清单（相对路径与 SHA-256）必须相同，每个模块的候选 unresolved 引用必须是基线的子集，否则非零退出并列出模块/符号；CRC 差异仍失败。报告保留 symvers SHA-256，`--config <.config>`、`--image <Image>` 分别追加可选摘要；不传 baseline 时保留旧行为与报告字段。测试在 `tools/ci/test_module_abi.py`（`covers: install.gki-kernel/E1`），先失败再实现，使用合成 ELF64 `.ko` 的 `__versions` 段。
 - [ ] `module_abi.py --baseline` 对照原厂全部模块。
 - [ ] 验收：0 个 CRC 不匹配，并记录可比较的引用数和未覆盖的范围（`install.gki-kernel` E1）。其他选项引起的差异逐个定位，不放宽检查。
 
@@ -158,6 +158,7 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 
 ## 记录
 
+- 2026-10-04：Codex 完成 Task 1.3 的 ABI 工具阻断项修复。离线验证：指定 venv 的 `python -m pytest -q tools/ci/test_module_abi.py` 为 18 passed、17 subtests passed，`python tools/pq.py lint` 退出 0。覆盖缺失导出、模块新增/删除/改名/摘要变化、相同基线、未解析引用减少、CRC 差异、不传 baseline 的兼容行为和可选内核产物摘要；空清单及损坏基线也拒绝。仅完成工具与合成输入验证，1.2 原厂等价报告、候选内核编译及原厂模块实测仍由后续任务验收。
 - 2026-10-04：Codex（gpt-6.1-sol / high）审查本计划，提出 11 条意见（1 个阻断：`module_abi.py` 漏判缺失导出）。核实后全部采纳：LTO 实测为 `LTO_NONE`，与 `--lto=none` 一致；其余修订见 M0/M1 各任务。
 - 2026-10-04：编译机 `repo init --standalone-manifest` 后同步 ACK 源码；内核 manifest 仓库没有 `android14-6.1-2025-09` 分支，只能用固定的 manifest 文件。
 
