@@ -1,0 +1,31 @@
+#!/usr/bin/python3
+"""Mount the container's /dev/shm with the desktop APK's SELinux label.
+
+Usage: android-shm-mount CONTEXT_FILE [MOUNTINFO]
+
+The app maps KWin's shared-memory buffers from /dev/shm, so the files there need the APK's
+appdomain_tmpfs label and categories (rungic-plasma writes it to CONTEXT_FILE). util-linux's
+mount cannot be used: libmount removes SELinux options when it cannot see selinuxfs, which
+the container does not mount, and reports success with an unlabelled tmpfs. This calls
+mount(2) directly and then checks that the kernel kept the context.
+"""
+import ctypes
+import os
+import sys
+
+MS_NOSUID, MS_NODEV = 2, 4
+
+context_file = sys.argv[1]
+mountinfo = sys.argv[2] if len(sys.argv) > 2 else '/proc/self/mountinfo'
+context = open(context_file).read().strip()
+libc = ctypes.CDLL(None, use_errno=True)
+# The categories contain commas, so the context is quoted inside the option string.
+options = f'mode=1777,fscontext=u:object_r:tmpfs:s0,context="{context}"'.encode()
+if libc.mount(b'tmpfs', b'/dev/shm', b'tmpfs', MS_NOSUID | MS_NODEV, options) != 0:
+    sys.exit(f'android-shm-mount: mount /dev/shm: {os.strerror(ctypes.get_errno())}')
+with open(mountinfo) as table:
+    mounts = [line.split() for line in table]
+shm = [fields for fields in mounts if len(fields) > 4 and fields[4] == '/dev/shm']
+if not shm or f'context="{context}"' not in shm[-1][-1]:
+    sys.exit('android-shm-mount: /dev/shm is mounted without the APK context; '
+             'the app could not map KWin buffers')

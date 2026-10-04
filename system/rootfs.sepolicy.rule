@@ -5,3 +5,6 @@
 type rungic_image file_type
 typeattribute rungic_image data_file_type
 allow kernel rungic_image file { open read write getattr ioctl lock map }
+# The container's /dev/shm carries the APK's appdomain_tmpfs label (system/init). Pixel
+# policy denies associating that type with its own tmpfs superblock; Motorola's allowed it.
+allow appdomain_tmpfs appdomain_tmpfs filesystem associate

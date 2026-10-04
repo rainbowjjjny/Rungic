@@ -5,6 +5,7 @@
   "build": "device",
   "paths": [
     "system/init",
+    "system/android-shm-mount",
     "desktop/session",
     "desktop/login-environment.py",
     "system/user-dirs",

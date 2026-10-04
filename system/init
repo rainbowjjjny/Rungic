@@ -4,9 +4,10 @@ mkdir -p /var/log/plasma
 exec >>/var/log/plasma/init.log 2>&1
 # These mounts are in LXC's private mount namespace.
 mount -o remount,bind,suid,nodev / /
-context=$(cat /var/lib/rungic-host/android-shm-context)
 umount /dev/shm
-mount -t tmpfs -o "nosuid,nodev,mode=1777,fscontext=u:object_r:tmpfs:s0,context=\"$context\"" tmpfs /dev/shm
+# The APK's label on /dev/shm (KWin's shared-memory buffers); not util-linux mount, which drops
+# SELinux options without selinuxfs (android-shm-mount).
+/usr/libexec/rungic-android-shm-mount /var/lib/rungic-host/android-shm-context
 # proc:mixed makes /proc/sys read-only. bubblewrap's --disable-userns, which
 # Flatpak adds to every sandbox, writes user.max_user_namespaces from inside the
 # sandbox's own user namespace (the value is per user namespace), so only

@@ -235,6 +235,8 @@ features:
         docs: [docs/80-g100-image-installation-retrospective.md]
     code:
       - android/app/src/com/rungic/plasma/MainActivity.java
+      - android/app/src/com/rungic/plasma/RootShell.java
+      - android/app/tests/RootShellTest.java
       - android/app/src/com/rungic/plasma/DesktopService.java
       - android/app/AndroidManifest.xml
       - android/app/res/values/strings.xml
@@ -489,6 +491,7 @@ features:
       - packaging/rungic-plasma-config/
       - tools/ci/build_host_seed.py
       - tools/ci/test_container_control.py
+      - tools/ci/test_android_shm.py
     docs:
       - docs/61-delivery-diagnostics-plan.md
 
