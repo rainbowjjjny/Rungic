@@ -1,3 +1,14 @@
+mesa (26.3.0~devel20260824+rungic6) resolute; urgency=medium
+
+  * Include virgl for husky's virpipe/vtest path to Android Mali; keep
+    freedreno/zink with KGSL and softpipe/llvmpipe CPU fallbacks.
+  * Serialize complete vtest socket transactions shared by Qt's threaded
+    contexts to prevent command stream corruption and fence-wait crashes.
+  * Report failed vtest connections before protocol I/O and fail screen
+    creation cleanly; session selection of llvmpipe remains separate.
+
+ -- Rungic <noreply@rungic.invalid>  Mon, 05 Oct 2026 12:00:00 +0900
+
 mesa (26.3.0~devel20260824+rungic5) resolute; urgency=medium
 
   * Ship gbm/dri_gbm.so in libgbm1 as Ubuntu resolute does; in

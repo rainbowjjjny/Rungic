@@ -594,3 +594,7 @@ G100 ZY32M9MRVP / Android 16 / APK 2.29 开发版通过标准 PA 客户端检查
 ## 2026-10-04：无 KGSL 的共享图形入口（离线验证）
 
 启动时 KGSL 与 DMA heap 分别按字符设备存在性授权并可选挂载，不能把 DMA heap 存在当成 Adreno 能力。KGSL 路径仍为应用 → Mesa freedreno/OpenGL → KWin Android 后端 → Android AHB/Adreno；无 KGSL 时保留应用软件渲染 → KWin QPainter/SHM → Android 宿主的共享内存合成路径，`gpu-env` 与用户管理器清除旧 KGSL 驱动覆盖，KWin 不启用 UBWC。后端沿用已有 `android-backend-hooks.patch`，本轮未修改协议或 Android 硬件通路。验收从 Android root 只读核对 KGSL，避免把 Qualcomm 容器漏挂设备误标为不适用；指定的 GPU、录屏、性能与 WFD 检查缺 KGSL 时记录原因与 `passed=null`。上述选择逻辑已用离线替身测试，llvmpipe 构建、真实帧输出和触摸仍待 [108 篇](../108-husky-port.md) 2.3/M4。
+
+## 2026-10-05：husky 的 vtest 共享图形入口（B1，待集成）
+
+目标链路：Qt Quick/其他 GL 应用 → 系统 Mesa virgl（`GALLIUM_DRIVER=virpipe`）→ vtest Unix socket → Android init PID 命名空间中的 virglrenderer EGL/GLES → Mali；画面仍经 KWin QPainter/SHM → Android 宿主呈现。容器不挂载、不打开 `/dev/mali0`，避免 kbase PID 命名空间 panic。B1 只增加 Mesa 驱动和事务锁/连接失败补丁，尚未启动或选择这条链路；现有 KGSL 与 llvmpipe 路径保留。winsys 连接失败会向调用方报告建屏失败；显式 virpipe 不触发 Mesa 自动换 llvmpipe，服务探测、环境选择与会话恢复须由后续集成处理。固定源码及离线验证、原型与本版本验收的边界见 [108 篇记录](../108-husky-port.md#记录)。

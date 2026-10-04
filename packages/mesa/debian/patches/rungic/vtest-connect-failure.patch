@@ -1,0 +1,73 @@
+Description: virgl/vtest: propagate connection failures to screen creation
+ A missing Android vtest server must not look like a successful connection.
+ Return the saved negative errno and close the socket before sending init or
+ negotiating the protocol. Free the winsys on failure, and guard both software
+ screen helpers against a NULL winsys (virgl_create_screen dereferences it).
+ This reports screen creation failure; an explicit GALLIUM_DRIVER=virpipe
+ still prevents automatic llvmpipe selection. Session fallback is separate.
+Origin: vendor, Rungic
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Pending [generic vtest error propagation; not submitted upstream]
+X-Rungic-Tests: L0:tools/test_mesa_packaging.py (build options and series); missing-server screen creation (offline C harness; packaged EGL to verify)
+X-Rungic-Docs: docs/108-husky-port.md (M5, record)
+Gbp-Pq: Topic rungic
+
+diff --git a/src/gallium/winsys/virgl/vtest/virgl_vtest_socket.c b/src/gallium/winsys/virgl/vtest/virgl_vtest_socket.c
+--- a/src/gallium/winsys/virgl/vtest/virgl_vtest_socket.c
++++ b/src/gallium/winsys/virgl/vtest/virgl_vtest_socket.c
+@@ -218,6 +218,13 @@
+       }
+    } while (ret == -EINTR);
+ 
++   if (ret < 0) {
++      fprintf(stderr, "vtest: failed to connect to %s: %s\n",
++              un.sun_path, strerror(-ret));
++      close(sock);
++      return ret;
++   }
++
+    vws->sock_fd = sock;
+    virgl_vtest_send_init(vws);
+    vws->protocol_version = virgl_vtest_negotiate_version(vws, VTEST_PROTOCOL_VERSION);
+diff --git a/src/gallium/winsys/virgl/vtest/virgl_vtest_winsys.c b/src/gallium/winsys/virgl/vtest/virgl_vtest_winsys.c
+--- a/src/gallium/winsys/virgl/vtest/virgl_vtest_winsys.c
++++ b/src/gallium/winsys/virgl/vtest/virgl_vtest_winsys.c
+@@ -780,7 +780,10 @@
+    if (!vtws)
+       return NULL;
+ 
+-   virgl_vtest_connect(vtws);
++   if (virgl_vtest_connect(vtws) < 0) {
++      FREE(vtws);
++      return NULL;
++   }
+    vtws->sws = sws;
+ 
+    virgl_resource_cache_init(&vtws->cache, CACHE_TIMEOUT_USEC,
+diff --git a/src/gallium/auxiliary/target-helpers/sw_helper.h b/src/gallium/auxiliary/target-helpers/sw_helper.h
+--- a/src/gallium/auxiliary/target-helpers/sw_helper.h
++++ b/src/gallium/auxiliary/target-helpers/sw_helper.h
+@@ -47,7 +47,8 @@
+    if (screen == NULL && strcmp(driver, "virpipe") == 0) {
+       struct virgl_winsys *vws;
+       vws = virgl_vtest_winsys_wrap(winsys);
+-      screen = virgl_create_screen(vws, NULL);
++      if (vws)
++         screen = virgl_create_screen(vws, NULL);
+    }
+ #endif
+ 
+diff --git a/src/gallium/auxiliary/target-helpers/inline_sw_helper.h b/src/gallium/auxiliary/target-helpers/inline_sw_helper.h
+--- a/src/gallium/auxiliary/target-helpers/inline_sw_helper.h
++++ b/src/gallium/auxiliary/target-helpers/inline_sw_helper.h
+@@ -43,7 +43,8 @@
+    if (screen == NULL && strcmp(driver, "virpipe") == 0) {
+       struct virgl_winsys *vws;
+       vws = virgl_vtest_winsys_wrap(winsys);
+-      screen = virgl_create_screen(vws, NULL);
++      if (vws)
++         screen = virgl_create_screen(vws, NULL);
+    }
+ #endif
+ 

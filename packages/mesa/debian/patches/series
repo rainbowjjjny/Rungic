@@ -2,3 +2,5 @@ rungic/kgsl-dmabuf-import-ubwc.patch
 rungic/egl-x11-dri3-fallback-software.patch
 rungic/x11-kgsl-needs-dri3.patch
 rungic/kgsl-import-is-shared.patch
+rungic/vtest-socket-transaction-lock.patch
+rungic/vtest-connect-failure.patch

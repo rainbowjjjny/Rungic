@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""One Mesa runtime must serve husky (Mali, CPU GL) and Qualcomm (KGSL).
+"""One Mesa runtime must serve husky (Mali via virgl, CPU GL) and Qualcomm (KGSL).
 
 These are packaging checks with a synthetic install tree, not renderer acceptance.
 """
@@ -12,6 +12,43 @@ import subprocess
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+# covers: apps.gpu/E5
+def test_husky_mali_via_vtest_keeps_qualcomm_and_cpu_fallbacks():
+    # Mali stays in Android's init PID namespace: virpipe speaks vtest rather
+    # than opening /dev/mali0 in LXC (kbase would panic). The same Mesa must still
+    # serve Qualcomm KGSL and keep llvmpipe when the Android server is unavailable.
+    opts = options()
+    assert {'virgl', 'freedreno', 'zink', 'softpipe', 'llvmpipe'} <= set(
+        opts['gallium-drivers'].split(','))
+    assert opts['freedreno-kmds'] == 'kgsl'
+    assert opts['vulkan-drivers'] == 'freedreno'
+    assert opts['llvm'] == 'enabled'
+
+
+# covers: apps.gpu/E5
+def test_virpipe_safety_patches_are_in_the_build_queue():
+    # Qt's threaded contexts share a socket: mixed requests crash fence waits.
+    # A missing vtest server must fail screen creation before any protocol I/O;
+    # this lets the caller handle failure instead of aborting plasmashell later.
+    patches = ROOT / 'packages/mesa/debian/patches'
+    series = [line.strip() for line in (patches / 'series').read_text().splitlines()
+              if line.strip() and not line.startswith('#')]
+    required = ['rungic/vtest-socket-transaction-lock.patch',
+                'rungic/vtest-connect-failure.patch']
+    for name in required:
+        assert name in series
+        assert (patches / name).is_file()
+    assert series.index(required[0]) < series.index(required[1])
+
+
+# covers: apps.gpu/E5
+def test_virpipe_changes_get_a_new_package_revision():
+    # +rungic5 did not contain virgl or the vtest fixes. Publishing at that same
+    # version would let APT keep the old binary on husky instead of upgrading it.
+    first = (ROOT / 'packages/mesa/debian/changelog').read_text().splitlines()[0]
+    assert first == 'mesa (26.3.0~devel20260824+rungic6) resolute; urgency=medium'
 
 
 def options():
@@ -56,7 +93,7 @@ def test_packaged_cpu_gl_keeps_drivers_glvnd_and_llvm_runtime(tmp_path):
         path.write_text('synthetic runtime')
     (lib / 'libgbm.so').symlink_to('libgbm.so.1')
     (lib / 'dri').mkdir()
-    for driver in ('swrast', 'kgsl', 'zink'):
+    for driver in ('swrast', 'kgsl', 'zink', 'virtio_gpu'):
         (lib / 'dri' / f'{driver}_dri.so').symlink_to('../libgallium-26.3.0.so')
     (source / 'docs').mkdir(parents=True)
     (source / 'docs/license.rst').write_text('synthetic MIT license')
@@ -68,7 +105,7 @@ def test_packaged_cpu_gl_keeps_drivers_glvnd_and_llvm_runtime(tmp_path):
     # Ubuntu resolute mesa-libgallium uses this runtime, not llvm-21-dev.
     assert 'libllvm21 (>= 1:21.1.0)' in control
     assert 'llvm-21-dev' not in control
-    for driver in ('swrast', 'kgsl', 'zink'):
+    for driver in ('swrast', 'kgsl', 'zink', 'virtio_gpu'):
         path = output / 'libgl1-mesa-dri/usr/lib/aarch64-linux-gnu/dri' / f'{driver}_dri.so'
         assert path.is_symlink()
         assert path.readlink() == Path('../libgallium-26.3.0.so')
@@ -94,6 +131,8 @@ def test_flatpak_gl_extension_builds_without_llvm():
     opts = dict(a[2:].split('=', 1) for a in shlex.split(out) if a.startswith('-D'))
     assert opts['llvm'] == 'disabled'
     assert 'llvmpipe' not in opts['gallium-drivers'].split(',')
+    # Adding host virgl must not leak into the SDK extension's own override.
+    assert 'virgl' not in opts['gallium-drivers'].split(',')
     assert {'freedreno', 'zink', 'softpipe'} <= set(opts['gallium-drivers'].split(','))
 
 

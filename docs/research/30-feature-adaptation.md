@@ -240,3 +240,7 @@ USB G100 已部署 `20260930.12`：suggestions `0.452`、voice-agent `0.453`、d
 ## 2026-10-04：husky 的无 KGSL 启动路径（离线验证）
 
 容器控制器按 KGSL 与 DMA heap 字符设备是否存在分别生成规则，两项挂载可选；husky 有 `/dev/dma_heap/system`，无 `/dev/kgsl-3d0`，不会因缺 KGSL 中止容器启动。会话保留 QPainter/Qt Quick 软件默认并清除旧 Adreno 环境，KWin 的 UBWC 仅在 KGSL 存在时启用；GPU 契约、录屏快捷设置、Adreno 性能与高通 WFD 契约在 Android 无 KGSL 时记录带原因的 `not applicable`，不计为通过。离线替身覆盖两条路径及 Qualcomm 失败保留，未部署或验收手机桌面；Mesa llvmpipe 包仍待 2.3，实机仍待 M4。详见 [108 篇](../108-husky-port.md) Tasks 2.1、2.2、2.5。
+
+## 2026-10-05：husky 的 virpipe Mesa 候选（B1，离线验证）
+
+系统 Mesa `+rungic6` 增加 virgl，与原有 freedreno/zink（KGSL/Turnip）及 softpipe/llvmpipe 共存；Flatpak GL 的独立覆盖不变。复用原型 socket 事务锁，并修正 C11 递归锁初始化和销毁；connect 失败在协议 I/O 前返回，winsys 与两种建屏入口干净失败。固定源码队列应用、打包测试和抽取实际 C 函数的离线替身检查通过，尚未构建部署本版本或完成真实 EGL/Qt 验收。显式 virpipe 不自动回退 llvmpipe，服务与会话回退待后续任务；容器不得访问 `/dev/mali0`。完整证据与待验范围见 [108 篇记录](../108-husky-port.md#记录)。
