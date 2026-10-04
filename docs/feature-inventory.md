@@ -660,7 +660,7 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 经由接口：`kwin-android-host`
 
 - **E1** 有 KGSL 的 Adreno 710 手机上，普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（单元测试、人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
-- **E2** 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时保留 KWIN_COMPOSE=Q、QT_QUICK_BACKEND=software，清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
+- **E2** 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（Mesa llvmpipe，软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
 - **E3** 应用抽屉滑动时 Surface 呈现间隔超过 12.6 ms 的比例低于 1%（GLES 合成）。（实机验收、人工；只能在手机上看：呈现间隔是手机 GPU 与安卓刷新下的性能，只能在手机上量）
 - **E4** 系统 Mesa 的包不会被发行版更新覆盖，升级 Mesa 后 KWin 不会因图形复位而中止。（缺口：只能在手机上换包重启工作区验证；没有自动检查）
 - **E5** 同一 Mesa 配方包含 softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL），为 husky 等非高通手机提供 CPU GL 构建路径；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND。（单元测试）

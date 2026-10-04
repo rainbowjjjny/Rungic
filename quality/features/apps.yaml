@@ -113,7 +113,7 @@ features:
           - {doc: docs/research/93-xwayland-kgsl-gpu.md, date: 2026-09-30, note: "Krita 6 原生 Wayland 下渲染器 FD710"}
         device: 渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染
       - id: E2
-        text: 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时保留 KWIN_COMPOSE=Q、QT_QUICK_BACKEND=software，清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。
+        text: 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（Mesa llvmpipe，软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。
         evidence:
           - {doc: docs/56-kwin-vulkan-quantification.md, date: 2026-09-26, note: "撤回 Vulkan 后 414 帧逐帧检测无闪屏"}
         device: 整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查

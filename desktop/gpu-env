@@ -14,8 +14,12 @@ if [ -c /dev/kgsl-3d0 ]; then
     [ ! -d /var/lib/flatpak/extension/org.freedesktop.Platform.GL.rungic ] || export FLATPAK_GL_DRIVERS=rungic
     unset LIBGL_ALWAYS_SOFTWARE LD_LIBRARY_PATH
 else
-    # Non-Qualcomm phones keep session's QPainter / Qt Quick software defaults.
-    # Remove inherited Adreno settings so Mesa can choose a CPU driver (llvmpipe).
+    # Non-Qualcomm phones (Mali on husky): KWin keeps session's QPainter compositing, whose
+    # shared-memory buffers reach the app. Qt Quick draws with GL on Mesa's llvmpipe: its
+    # software scene graph left the dock and app drawer blank (docs/73). Remove inherited
+    # Adreno settings so Mesa does not try the unavailable KGSL driver.
     unset MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF FD_KGSL_DMABUF_UBWC
-    unset VK_DRIVER_FILES QSG_RHI_BACKEND GSK_RENDERER FLATPAK_GL_DRIVERS
+    unset VK_DRIVER_FILES GSK_RENDERER FLATPAK_GL_DRIVERS LIBGL_ALWAYS_SOFTWARE
+    export QSG_RHI_BACKEND=opengl
+    export QT_QUICK_BACKEND=
 fi

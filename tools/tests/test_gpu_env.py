@@ -2,7 +2,8 @@
 """The session's GPU environment (desktop/gpu-env, /etc/plasma/gpu-env), sourced by the session, KWin
 and the workspaces: hardware Mesa on KGSL, Qt Quick and GTK on GL (not Vulkan: whole grey frames,
 docs/56), and no stale software overrides on Adreno. Non-Qualcomm phones such as Pixel 8 Pro
-(husky/Mali) keep the software defaults without inherited KGSL overrides. What the GPU then draws,
+(husky/Mali) keep KWin on QPainter but draw Qt Quick with GL on Mesa's llvmpipe, without
+inherited KGSL overrides. What the GPU then draws,
 and whether a frame flashes grey, is the phone's to show (docs/51, docs/56)."""
 import shlex
 import subprocess
@@ -42,9 +43,11 @@ def test_qt_quick_and_gtk_draw_with_gl_on_kgsl(tmp_path):
 
 
 # covers: apps.gpu/E2
-def test_husky_keeps_session_software_defaults_and_mesa_can_choose_llvmpipe(tmp_path):
-    # Pixel 8 Pro's Mali has no KGSL. A stale override must not force Mesa to
-    # open an unavailable Adreno driver, or replace the working QPainter defaults.
+def test_husky_keeps_qpainter_kwin_and_draws_qt_quick_with_llvmpipe(tmp_path):
+    # Pixel 8 Pro's Mali has no KGSL. A stale override must not force Mesa to open an
+    # unavailable Adreno driver. KWin stays on QPainter (its shm buffers reach the app), but
+    # Qt Quick must use GL: its software scene graph left the dock and app drawer blank on
+    # husky (docs/73), and Mesa's llvmpipe draws them.
     defaults = (ROOT / 'desktop/session').read_text().split('export RUNGIC_ANDROID_DISPLAY=')[0]
     script = tmp_path / 'defaults'
     script.write_text(defaults[defaults.index('export QT_QUICK_BACKEND='):])
@@ -53,10 +56,12 @@ def test_husky_keeps_session_software_defaults_and_mesa_can_choose_llvmpipe(tmp_
     defaults = dict(line.split('=', 1) for line in env.decode().split('\0') if '=' in line)
     stale = {'MESA_LOADER_DRIVER_OVERRIDE': 'kgsl', 'FD_KGSL_ENABLE_DMABUF': '1',
              'FD_KGSL_DMABUF_UBWC': '1', 'VK_DRIVER_FILES': 'freedreno.json',
-             'QSG_RHI_BACKEND': 'opengl', 'GSK_RENDERER': 'gl', 'FLATPAK_GL_DRIVERS': 'rungic'}
+             'GSK_RENDERER': 'gl', 'FLATPAK_GL_DRIVERS': 'rungic'}
     for inherited in ({}, stale):
         env = session({**defaults, **inherited}, tmp_path, kgsl=False)
-        assert env['KWIN_COMPOSE'] == 'Q' and env['QT_QUICK_BACKEND'] == 'software'
+        assert env['KWIN_COMPOSE'] == 'Q'
+        assert env['QT_QUICK_BACKEND'] == '' and env['QSG_RHI_BACKEND'] == 'opengl'
+        assert 'LIBGL_ALWAYS_SOFTWARE' not in env
         for key in stale:
             assert key not in env, f'{key} must not select the Adreno path on husky'
 
