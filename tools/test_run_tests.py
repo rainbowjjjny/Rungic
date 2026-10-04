@@ -108,6 +108,8 @@ class RunTestsScriptTests(unittest.TestCase):
         self.assertIn('java -cp', ' '.join(log))
         self.assertTrue(any('com.rungic.plasma.FirstBootStateTest' in l for l in log))
         self.assertTrue(any('com.rungic.plasma.ControlExceptionTest' in l for l in log))
+        self.assertTrue(any('com.rungic.plasma.DisplayGeometryTest' in l for l in log),
+                        'husky and Adreno display policy must run with the existing Java checks')
 
     # covers: delivery.offline-tests/E1
     def test_failures_are_named_at_the_end(self):

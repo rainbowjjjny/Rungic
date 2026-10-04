@@ -4,7 +4,7 @@
 
 以产品功能和用户场景为骨架：每条功能是用户能感知的一件事；“体验”是它必须做到的，每条都标明由什么检查（自动测试、实机验收、人工验证或已登记的缺口）。数据在 `quality/`，规则见 [quality/README.md](../quality/README.md)。
 
-共 161 条功能、678 条体验，其中 634 条有检查。
+共 161 条功能、681 条体验，其中 637 条有检查。
 
 ## Agent 能力
 
@@ -2295,6 +2295,8 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - **E4** 原生与 720 渲染之间切换时界面逻辑大小不变，多次往返倍率和保存的密度不漂移。（单元测试、人工）
 - **E5** 外屏（电视、助理屏）的缩放各自独立，调手机大小不改外屏；外屏设为主屏时状态栏安全区仍只用于手机。（人工）
 - **E6** 非法倍率（例如 6 倍、NaN、0）被拒绝，不写入配置；宿主拒绝或超时时恢复旧模式和刷新策略并返回失败。（单元测试、人工）
+- **E7** 未保存渲染分辨率时，无 KGSL 的手机（如 husky）默认短边 720（小屏不放大），减轻 CPU 渲染负担；有 KGSL 的 Qualcomm/Adreno 手机保留原生短边，已有用户设置仍优先。（单元测试）
+- **E8** 手机物理尺寸由真实显示模式的自然方向像素与 DisplayMetrics xdpi/ydpi 换算，宿主输出按 90°/270° 旋转交换毫米宽高，不随 720 渲染缓冲缩小；无效指标报告未知尺寸（0 mm），不套用别的手机尺寸。（单元测试）
 
 注意：
 - 安卓 density 是逻辑 dp 倍率，不是面板 PPI；480/160=3 不能保证 Plasma 控件与安卓控件等大。默认的 1.25 系数是待跨设备校准的产品参数。 [docs/85-phone-display-size-policy.md](../docs/85-phone-display-size-policy.md) [docs/50-plasma-display-settings.md](../docs/50-plasma-display-settings.md)
@@ -2302,7 +2304,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - 外屏旧位置与手机之间的空隙会让 KScreen 整套配置校验失败，表现为缩放应用不了；用标准接口把外屏贴到内屏右边界。 [docs/85-phone-display-size-policy.md](../docs/85-phone-display-size-policy.md)
 - 新账户、整包清数据首装、第二台设备和 API 30–33 回退路径还没有实机验收；当前账户移开配置的测试不等于首装。 [docs/85-phone-display-size-policy.md](../docs/85-phone-display-size-policy.md)
 
-文档：[docs/85-phone-display-size-policy.md](../docs/85-phone-display-size-policy.md)
+文档：[docs/85-phone-display-size-policy.md](../docs/85-phone-display-size-policy.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)
 
 #### 桌面里调亮度
 
@@ -2841,6 +2843,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - **E1** 候选内核与原厂模块逐符号比对 CRC：GKI 可比较的引用 0 差异，并写明未覆盖的引用范围；正确解析 Android 15/16 的旧式与扩展 modversions。（单元测试、人工）
 - **E2** 刷入候选内核后 Android 正常启动，原厂模块全部加载，SELinux Enforcing，LXC 需要的 namespaces 可用。（人工）
 - **E3** 保留原厂模块的签名信任证书，不因缺模块而不开机。（人工）
+- **E4** 独立组包的内核报告从最终 v4 boot 镜像自动提取真实 Linux 版本串、整文件 SHA-256 与字节数；支持 gzip、LZ4 legacy 和未压缩 Image，输入损坏、版本串缺失或可选构建 Image 不匹配时拒绝生成报告。（单元测试）
 
 注意：
 - 直接开启 IPC、namespace 和额外 cgroup 配置曾造成 9,768 个 CRC 不匹配；要锁定与原厂匹配的 ACK 提交、构建号、页大小和证书，用 KABI 预留槽承载新字段。 [docs/80-g100-image-installation-retrospective.md](../docs/80-g100-image-installation-retrospective.md)

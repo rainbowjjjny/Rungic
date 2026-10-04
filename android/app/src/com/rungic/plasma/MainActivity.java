@@ -448,7 +448,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         int width=r-l,height=b-t;
         if(width<=0 || height<=0)return;
         Display.Mode physical=display.getDisplay().getMode();
-        int shortEdge=getPreferences(MODE_PRIVATE).getInt("render_short_edge",Math.min(physical.getPhysicalWidth(),physical.getPhysicalHeight()));
+        // Match the Linux KGSL path by its device node, not by phone brand or allocator
+        // startup (AHardwareBuffer allocation also works on Mali). Metadata needs no GPU open.
+        int defaultEdge=DisplayGeometry.defaultRenderShortEdge(new File("/dev/kgsl-3d0").exists(),
+            physical.getPhysicalWidth(),physical.getPhysicalHeight());
+        int shortEdge=getPreferences(MODE_PRIVATE).getInt("render_short_edge",defaultEdge);
         int w=width>height?Math.max(shortEdge,(int)Math.round(shortEdge*0.5*width/height)*2):shortEdge;
         int h=height>=width?Math.max(shortEdge,(int)Math.round(shortEdge*0.5*height/width)*2):shortEdge;
         if(w==bufferWidth && h==bufferHeight)return;
@@ -614,6 +618,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         Display.Mode physical=d.getMode();
         android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
         d.getRealMetrics(metrics);
+        int[] physicalMm=DisplayGeometry.physicalSizeMm(physical.getPhysicalWidth(),physical.getPhysicalHeight(),metrics.xdpi,metrics.ydpi);
         int densityDpi=metrics.densityDpi,densityWidth=metrics.widthPixels,densityHeight=metrics.heightPixels;
         if(android.os.Build.VERSION.SDK_INT>=34) {
             // Maximum bounds describe the display reference, not the current Surface or a
@@ -637,8 +642,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             .put("densityDpi",densityDpi)
             .put("densityWidthPixels",densityWidth).put("densityHeightPixels",densityHeight)
             .put("physicalWidth",physical.getPhysicalWidth()).put("physicalHeight",physical.getPhysicalHeight())
-            .put("physicalWidthMM",Math.round(physical.getPhysicalWidth()*25.4f/metrics.xdpi))
-            .put("physicalHeightMM",Math.round(physical.getPhysicalHeight()*25.4f/metrics.ydpi))
+            .put("physicalWidthMM",physicalMm[0])
+            .put("physicalHeightMM",physicalMm[1])
             .put("renderWidth",bufferWidth).put("renderHeight",bufferHeight).put("renderModes",sizes)
             .put("refreshRates",pacer.supportedRates()).put("refreshPolicy",pacer.policy())
             .put("currentRefresh",d.getRefreshRate());
@@ -685,9 +690,18 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
     private void updateSize() {
         if (initialized) {
+            Display d=display.getDisplay();
+            if(d==null)return;
+            android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
+            d.getRealMetrics(metrics);
+            Display.Mode physical=d.getMode();
+            int rotation=d.getRotation();
+            // Android keeps xdpi/ydpi in natural panel axes even when metrics pixels rotate.
+            int[] physicalMm=DisplayGeometry.physicalSizeMm(physical.getPhysicalWidth(),physical.getPhysicalHeight(),
+                metrics.xdpi,metrics.ydpi,rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270);
             int w=bufferWidth,h=bufferHeight;
             NativeBridge.setResolution(w,h);
-            NativeBridge.onSurfaceChanged(w,h,w>h?151:68,w>h?68:151);
+            NativeBridge.onSurfaceChanged(w,h,physicalMm[0],physicalMm[1]);
         }
     }
     @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) { worker.execute(this::updateSize); }
