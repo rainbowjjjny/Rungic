@@ -40,3 +40,6 @@ cp "$CARGO_TARGET_DIR/aarch64-linux-android/release/libuniffi_winland_core.so" "
 task_cxx=${RUNGIC_ANDROID_SYSROOT:+$RUNGIC_ANDROID_SYSROOT/usr/lib/aarch64-linux-android/libc++_shared.so}
 if [ -n "$task_cxx" ] && [ -f "$task_cxx" ]; then cp "$task_cxx" "$task_native_out/"; fi
 [ -s "$task_native_out/libc++_shared.so" ] || { echo "libc++_shared.so missing from $task_native_out" >&2; exit 1; }
+
+# App-domain vtest for non-KGSL phones; the supervisor chooses whether to run it.
+RUNGIC_NATIVE_OUT="$task_native_out" sh "$task_root/android/build-virgl-server.sh"

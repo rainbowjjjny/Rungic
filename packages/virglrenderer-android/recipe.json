@@ -1,0 +1,24 @@
+{
+  "comment": "Android app-domain vtest: system EGL/GLES, no ANGLE, Termux paths, GBM, DRM or Venus. Built together with static epoxy by android/build-virgl-server.sh. Source/patch research and remaining device acceptance: docs/108-husky-port.md.",
+  "kind": "upstream",
+  "source": "virglrenderer-android",
+  "version": "1.3.0",
+  "tarball": "virglrenderer-1.3.0.tar.gz",
+  "epoxy_tarball": "libepoxy-1.5.10.tar.gz",
+  "upstream": "https://gitlab.freedesktop.org/virgl/virglrenderer",
+  "licenses": "MIT: virglrenderer/COPYING and libepoxy/COPYING. Termux package patches inherit the package MIT license per LICENSE.md; its build infrastructure is Apache-2.0. No gl4es/S3TC code included.",
+  "patch_origin": {
+    "repository": "https://github.com/termux/termux-packages",
+    "commit": "d5bd85588ca75ac530e68cf84ad211e5bb4f3d49",
+    "license_file": "LICENSE.md",
+    "directory": "packages/virglrenderer-android"
+  },
+  "files": {
+    "virglrenderer-1.3.0.tar.gz": "56170f8caa1bb642a2624b649e3bcca095ec2834814e5c308efc8a85a709e4ce",
+    "libepoxy-1.5.10.tar.gz": "a7ced37f4102b745ac86d6a70a9da399cc139ff168ba6b8002b4d8d43c900c15"
+  },
+  "fetch": {
+    "virglrenderer-1.3.0.tar.gz": "https://gitlab.freedesktop.org/virgl/virglrenderer/-/archive/virglrenderer-1.3.0/virglrenderer-virglrenderer-1.3.0.tar.gz",
+    "libepoxy-1.5.10.tar.gz": "https://github.com/anholt/libepoxy/archive/refs/tags/1.5.10.tar.gz"
+  }
+}

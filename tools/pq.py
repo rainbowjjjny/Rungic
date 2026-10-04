@@ -91,7 +91,8 @@ def fetch(name, opener=urllib.request.urlopen):
         if target.exists() and sha256(target) == want:
             continue
         partial = target.with_suffix(target.suffix + '.part')
-        with opener(info['fetch'].format(file=file)) as response, open(partial, 'wb') as out:
+        fetch_url = info['fetch'][file] if isinstance(info['fetch'], dict) else info['fetch'].format(file=file)
+        with opener(fetch_url) as response, open(partial, 'wb') as out:
             shutil.copyfileobj(response, out)
         have = sha256(partial)
         if have != want:

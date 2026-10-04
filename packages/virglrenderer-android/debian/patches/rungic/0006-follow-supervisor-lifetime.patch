@@ -1,0 +1,60 @@
+Description: Stop Android vtest workers when their supervising parent exits
+Author: Rungic <noreply@rungic.invalid>
+Origin: Rungic
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Inappropriate; Android app lifecycle
+X-Rungic-Tests: L1:NDK-cross-build; L3:husky-app-domain (to write)
+X-Rungic-Docs: docs/108-husky-port.md
+License: MIT
+ .
+ Preserve per-client fork isolation without orphaning GPU contexts on app/session
+ stop. Check the parent again after prctl to close the parent-exit race.
+---
+--- a/vtest/vtest_server.c
++++ b/vtest/vtest_server.c
+@@ -32,6 +32,9 @@
+ #include <unistd.h>
+ #include <stdlib.h>
+ #include <sys/types.h>
++#ifdef __ANDROID__
++#include <sys/prctl.h>
++#endif
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <sys/un.h>
+@@ -132,8 +135,20 @@
+ static int vtest_client_dispatch_commands(struct vtest_client *client);
+ 
+ 
++/* App death stops the listener; listener death stops every GPU worker. */
++static void vtest_follow_parent(pid_t parent)
++{
++#ifdef __ANDROID__
++   if (parent == 1 || prctl(PR_SET_PDEATHSIG, SIGTERM) < 0 || getppid() != parent)
++      _exit(EXIT_FAILURE);
++#else
++   (void)parent;
++#endif
++}
++
+ int vtest_main(int argc, char **argv)
+ {
++   vtest_follow_parent(getppid());
+ #ifdef __AFL_LOOP
+ while (__AFL_LOOP(1000)) {
+ #endif
+@@ -545,10 +560,12 @@
+ 
+ static pid_t vtest_server_fork(void)
+ {
++   pid_t parent = getpid();
+    pid_t pid = fork();
+ 
+    if (pid == 0) {
+-      /* child */
++      /* child: fork clears PR_SET_PDEATHSIG, so arm it again. */
++      vtest_follow_parent(parent);
+       vtest_server_set_signal_segv();
+       vtest_server_close_socket();
+       server.main_server = false;

@@ -4,8 +4,25 @@ import android.app.*;
 import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
+import java.io.File;
 
 public final class DesktopService extends Service {
+    // Owned by the foreground session, so Activity rotation/background does not
+    // kill clients. MainActivity calls this on its worker before Wayland/session startup.
+    private static RenderServer renderServer;
+    static synchronized void startRenderServer(Context context) {
+        if(renderServer==null)renderServer=new RenderServer(
+            new File(context.getApplicationInfo().nativeLibraryDir),
+            new File(context.getFilesDir(),"tmp"),new File("/dev/kgsl-3d0").exists());
+        renderServer.start();
+    }
+    static synchronized void stopRenderServer() {
+        if(renderServer!=null) { renderServer.stop(); renderServer=null; }
+    }
+    @Override public void onDestroy() {
+        stopRenderServer();
+        super.onDestroy();
+    }
     static void update(Context context,String state) {
         context.startForegroundService(new Intent(context,DesktopService.class).putExtra("state",state));
     }

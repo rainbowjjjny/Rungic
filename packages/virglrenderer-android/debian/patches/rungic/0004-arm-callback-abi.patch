@@ -1,0 +1,22 @@
+Description: Preserve the Vulkan callback calling convention on ARM
+Author: Rungic <noreply@rungic.invalid>
+Origin: https://github.com/termux/termux-packages/blob/d5bd85588ca75ac530e68cf84ad211e5bb4f3d49/packages/virglrenderer-android/0012-fix-build-on-arm.patch.beforehostbuild
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Inappropriate; Android app EGL integration
+X-Rungic-Tests: L0:tools/tests/test_virgl_server.py; L1:NDK-cross-build; L3:husky-app-domain (to write)
+X-Rungic-Docs: docs/108-husky-port.md
+License: MIT
+ .
+ Adapted from the MIT-licensed Termux package queue (LICENSE.md).
+---
+--- a/src/venus/vkr_instance.c
++++ b/src/venus/vkr_instance.c
+@@ -58,6 +58,7 @@
+    args->ret = count == ARRAY_SIZE(private_extensions) ? VK_SUCCESS : VK_INCOMPLETE;
+ }
+ 
++VKAPI_ATTR
+ static VkBool32
+ vkr_validation_callback(UNUSED VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                         UNUSED VkDebugUtilsMessageTypeFlagsEXT messageTypes,

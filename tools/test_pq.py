@@ -122,6 +122,25 @@ class FetchTests(PackageTree):
         self.assertEqual((cache / 'demo.orig.tar.xz').read_bytes(), data)
         self.assertEqual(sorted(p.name for p in cache.iterdir()), ['demo.orig.tar.xz'])
 
+    # covers: delivery.patch-queue/E1
+    def test_two_upstreams_keep_separate_urls_and_hashes(self):
+        """Husky's Android vtest builds virgl + epoxy, without Termux binaries."""
+        contents = {'virgl.tar.gz': b'virgl', 'epoxy.tar.gz': b'epoxy'}
+        urls = {name: f'https://example.org/{name}' for name in contents}
+        self.package({}, recipe={'fetch': urls, 'files': {
+            name: hashlib.sha256(data).hexdigest() for name, data in contents.items()}})
+        seen = []
+        def opener(url):
+            seen.append(url)
+            return io.BytesIO(contents[url.rsplit('/', 1)[1]])
+        pq.fetch('demo', opener=opener)
+        self.assertEqual(seen, list(urls.values()))
+        # Every archive is checked again; a corrupted cached epoxy cannot bypass its pin.
+        (self.root / 'sources/demo/epoxy.tar.gz').write_bytes(b'corrupted')
+        seen.clear()
+        pq.fetch('demo', opener=opener)
+        self.assertEqual(seen, [urls['epoxy.tar.gz']])
+
 
 class OverlayTests(PackageTree):
     def setUp(self):
