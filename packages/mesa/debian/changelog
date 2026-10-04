@@ -1,3 +1,10 @@
+mesa (26.3.0~devel20260824+rungic5) resolute; urgency=medium
+
+  * Ship gbm/dri_gbm.so in libgbm1 as Ubuntu resolute does; in
+    mesa-libgallium it made dpkg refuse to overwrite Ubuntu's libgbm1.
+
+ -- range-dev <noreply@localhost>  Sun, 04 Oct 2026 21:30:00 +0800
+
 mesa (26.3.0~devel20260824+rungic4) resolute; urgency=medium
 
   * Include softpipe and LLVM-enabled llvmpipe for CPU GL on non-Qualcomm

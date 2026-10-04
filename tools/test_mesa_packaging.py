@@ -80,3 +80,25 @@ def test_packaged_cpu_gl_keeps_drivers_glvnd_and_llvm_runtime(tmp_path):
     assert not list(output.rglob('libGLX.so*'))
     assert len(commands.call_args_list) == 7
     subprocess.run(['sh', '-n', str(output / 'mesa-libgallium/DEBIAN/preinst')], check=True)
+
+
+# covers: apps.gpu/E5
+def test_gbm_backend_ships_in_libgbm1_like_ubuntu(tmp_path):
+    # Ubuntu resolute's libgbm1 (26.0.8-1ubuntu0.3) owns gbm/dri_gbm.so. If our
+    # mesa-libgallium carried it, dpkg refuses the upgrade ("trying to overwrite
+    # ... which is also in package libgbm1") and the rootfs cannot install Mesa.
+    stage, output, source = (tmp_path / n for n in ('stage', 'debs', 'source'))
+    lib = stage / 'usr/lib/aarch64-linux-gnu'
+    for name in ('libgallium-26.3.0.so', 'libEGL_mesa.so.0', 'libGLX_mesa.so.0', 'libgbm.so.1',
+                 'pkgconfig/gbm.pc', 'libvulkan_freedreno.so', 'dri/swrast_dri.so', 'gbm/dri_gbm.so'):
+        path = lib / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('synthetic runtime')
+    (source / 'docs').mkdir(parents=True)
+    (source / 'docs/license.rst').write_text('synthetic MIT license')
+    env = {'RUNGIC_MESA_STAGE': str(stage), 'RUNGIC_MESA_PACKAGES': str(output),
+           'RUNGIC_MESA_SOURCE': str(source), 'RUNGIC_MESA_VERSION': 'test-version'}
+    with patch.dict(os.environ, env), patch('subprocess.run'):
+        runpy.run_path(str(ROOT / 'desktop/package-mesa.py'), run_name='__main__')
+    assert (output / 'libgbm1/usr/lib/aarch64-linux-gnu/gbm/dri_gbm.so').is_file()
+    assert not list((output / 'mesa-libgallium').rglob('dri_gbm.so'))

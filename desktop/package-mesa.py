@@ -40,11 +40,13 @@ deps = {
 
 def owner(path):
     name = path.name
-    if name.startswith('libgallium-') or '/gbm/' in str(path):
+    if name.startswith('libgallium-'):
         return 'mesa-libgallium'
     if name == 'gbm.h' or name == 'gbm.pc' or name == 'libgbm.so':
         return 'libgbm-dev'
-    if name.startswith('libgbm.so.'):
+    # Ubuntu resolute's libgbm1 owns the GBM backend (gbm/dri_gbm.so); shipping it in
+    # mesa-libgallium makes dpkg refuse to overwrite Ubuntu's libgbm1 on upgrade.
+    if name.startswith('libgbm.so.') or '/gbm/' in str(path):
         return 'libgbm1'
     if name.startswith('libEGL_mesa.so') or name == '50_mesa.json':
         return 'libegl-mesa0'
