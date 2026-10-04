@@ -32,7 +32,7 @@
     "common_commit": "fa1d6308d1fe803c3fdebcd3ee6f7a1155fc3462",
     "stock_release": "6.1.145-android14-11-gfa1d6308d1fe-ab14691759",
     "page_size": 4096,
-    "module_trust_certificate_sha256": null
+    "module_trust_certificate_sha256": "91f55959d4ca6eddc183c76d9c12469e7fa3d17b73aa6a6bb76b280b8009615c"
   },
   "release_requirements": {
     "arch": "arm64",
