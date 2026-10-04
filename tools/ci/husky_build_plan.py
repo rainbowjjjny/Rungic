@@ -395,7 +395,11 @@ def main():
         host_tools={name: str(Path(shutil.which(name)).resolve())
                     for name in ('bash', 'sh', 'zip', 'sed', 'find', 'git')},
         )
-    c['host_tools']['rustup'] = str((host_home / '.cargo/bin/rustup').resolve())
+    # rustup is wherever this machine installed it (~/.cargo/bin, Homebrew, ...).
+    rustup = shutil.which('rustup')
+    if rustup is None:
+        p.error('rustup not found on PATH')
+    c['host_tools']['rustup'] = str(Path(rustup).resolve())
     validate(c)
     if json.loads(Path(c['release_file']).read_text())['version'] != args.release:
         p.error('release manifest version differs from --release')
