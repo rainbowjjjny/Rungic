@@ -376,14 +376,15 @@ touch {build_on_device.MARKER}
 def build_device(pkg, tree, jobs=4, dev=None, clean=False):
     """dev: as for build_host. clean: build from nothing, not on the kept tree (sync_script)."""
     host = build_on_device.host
+    jobs = build_on_device.build_jobs(jobs)
     run = lambda script, level='container', timeout=120, check=True: host.run(script, timeout, check)
     name = pkg['name']
     base = f'{DEVICE_BASE}/{name}'
     if pkg.get('image'):
         # build.sh runs in another container image (a Flatpak SDK) next to the build container,
-        # sharing its build volume: only the Mac mini runs containers.
-        if host.name != 'macmini':
-            raise SystemExit(f'{name}: built in {pkg["image"]}, which needs --host macmini')
+        # sharing its build volume: both remote and local Docker can run it.
+        if host.name not in ('macmini', 'local-docker'):
+            raise SystemExit(f'{name}: built in {pkg["image"]}, which needs --host macmini or local-docker')
         base = f'{build_on_device.BASE}/packages/{name}'
     if pkg.get('build_depends'):
         missing = run('dpkg-query -W -f \'${db:Status-Abbrev} ${Package}\\n\' '
@@ -419,7 +420,7 @@ sh -eu "$SRC/{pkg['dir'].relative_to(WORKSPACE)}/build.sh"'''
         run(f'rm -rf {base}/root && mkdir -p {base}/root/DEBIAN', 'container')
         env = {'DESTDIR': f'{base}/root', 'SRC': f'{base}/src', 'SOURCE_DATE_EPOCH': epoch, 'JOBS': str(jobs),
                'HOME': '/root', 'LC_ALL': 'C.UTF-8', **host.proxy()}
-        command = (f'{host.DOCKER} run --rm -u 0 --volumes-from {host.CONTAINER} '
+        command = (f'{host.DOCKER} run --rm {host.platform_flags()}-u 0 --volumes-from {host.CONTAINER} '
                    + ''.join(f'-e {k}={shlex.quote(v)} ' for k, v in env.items())
                    + f'{pkg["image"]} nice -n 10 sh -eu {base}/src/{pkg["dir"].relative_to(WORKSPACE)}/build.sh')
         print(f'{name}: building in {pkg["image"]}', flush=True)
@@ -569,7 +570,7 @@ def main():
         if not names:
             parser.error('name packages or pass --all')
         build_on_device.use(a.host)
-        result = build(names, a.force, a.jobs or build_on_device.host.jobs, a.clean)
+        result = build(names, a.force, build_on_device.build_jobs(a.jobs), a.clean)
     print(json.dumps(result, indent=1, ensure_ascii=False))
 
 

@@ -1,3 +1,11 @@
+mesa (26.3.0~devel20260824+rungic4) resolute; urgency=medium
+
+  * Include softpipe and LLVM-enabled llvmpipe for CPU GL on non-Qualcomm
+    phones such as Pixel 8 Pro (husky); retain freedreno/zink with KGSL.
+  * Depend on Ubuntu resolute's libllvm21 runtime in mesa-libgallium.
+
+ -- range-dev <noreply@localhost>  Sun, 04 Oct 2026 12:00:00 +0900
+
 mesa (26.3.0~devel20260824+rungic3) resolute; urgency=medium
 
   * KGSL: exporting an imported dma-buf gives back the same buffer; X11 GL

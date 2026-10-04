@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Package the entire KGSL Mesa runtime coherently, retaining Ubuntu GLVND."""
+"""Package KGSL and CPU Mesa runtimes coherently, retaining Ubuntu GLVND."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -23,7 +23,12 @@ external = ('libc6 (>= 2.43), libdrm2 (>= 2.4.125), libexpat1, libelf1t64, '
             'libxcb-keysyms1, libdisplay-info3, libudev1')
 same = lambda name: f'{name} (= {version})'
 deps = {
-    'mesa-libgallium': external,
+    # Ubuntu resolute Mesa 26.0.3-1ubuntu1 uses llvm-21-dev to build and
+    # libllvm21 (>= 1:21.1.0) at runtime (including arm64):
+    # https://packages.ubuntu.com/resolute/mesa-libgallium
+    # arm64-host.Dockerfile installs Ubuntu's Mesa build-depends. llvmpipe
+    # lives in libgallium; Turnip does not need an LLVM dependency.
+    'mesa-libgallium': external + ', libllvm21 (>= 1:21.1.0)',
     'libegl-mesa0': same('mesa-libgallium') + ', ' + same('libgbm1'),
     'libglx-mesa0': same('mesa-libgallium') + ', ' + same('libgl1-mesa-dri'),
     'libgbm1': same('mesa-libgallium'),
@@ -63,7 +68,7 @@ for name in packages:
                'Section: libs\nPriority: optional\nMulti-Arch: same\n'
                'Maintainer: range-dev <noreply@localhost>\n'
                f'Depends: {deps[name]}\n'
-               'Description: Coherent Mesa KGSL build for the Rungic Plasma container\n'
+               'Description: Coherent Mesa KGSL and CPU build for the Rungic Plasma container\n'
                ' Built from the pinned Mesa for Android container source archive.\n')
     (directory / 'DEBIAN/control').write_text(control)
     sonames = {'libgbm1': 'libgbm 1', 'libegl-mesa0': 'libEGL_mesa 0',

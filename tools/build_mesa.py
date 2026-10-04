@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Build and package Mesa on the phone from its patch queue (packages/mesa, docs/73).
 
-  build_mesa.py [--host phone|macmini]
+  build_mesa.py [--host phone|macmini|local-docker]
                            meson build (build_on_device.py mesa targets, options from
                            desktop/mesa-meson-options), install into a stage, assemble the
                            packages with desktop/package-mesa.py, collect them into the release pool

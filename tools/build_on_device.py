@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 """Build a patch-queue component (packages/<name>, docs/71) natively on Ubuntu 26.04 ARM64: in the
-phone's container (--host phone) or in a Docker container on the Mac mini build host (--host
-macmini: Apple M4, tools/pq/arm64-host.Dockerfile; faster and keeps the phone cool). The default
-host is $RUNGIC_BUILD_HOST, else macmini (the phone is the fallback).
+phone's container (--host phone), a remote Mac (--host macmini, --ssh-host USER@HOST or
+$RUNGIC_BUILD_SSH; defaults to choukevin@macmini.wire.net), or this machine's native ARM64
+Docker (--host local-docker). Both Docker targets use tools/pq/arm64-host.Dockerfile. The default
+host is $RUNGIC_BUILD_HOST, else macmini. Local Docker limits jobs to the VM's CPU count,
+and one job per 2 GiB of VM RAM; --jobs can reduce this limit.
 
 The source tree (tools/pq.py source: upstream + debian/ with the patches applied) is copied into a persistent
 /root/rungic-build/<component>/src with `rsync --checksum`, so unchanged files
@@ -147,6 +149,14 @@ class MacMini:
     ready = False
     proxy_env = None
 
+    def __init__(self, ssh_host=None):
+        self.SSH = [*type(self).SSH[:-1], ssh_host or os.environ.get('RUNGIC_BUILD_SSH') or type(self).SSH[-1]]
+        self.ready = False
+        self.proxy_env = None
+
+    def platform_flags(self):
+        return ''
+
     def proxy(self):
         """{'http_proxy': ..., 'https_proxy': ...} for the container from the macOS system proxy, or {}."""
         if self.proxy_env is None:
@@ -165,7 +175,7 @@ class MacMini:
         return self.proxy_env
 
     def env_flags(self):
-        return ''.join(f'-e {k}={v} ' for k, v in self.proxy().items())
+        return ''.join(f'-e {shlex.quote(k + "=" + v)} ' for k, v in self.proxy().items())
 
     def ssh(self, command, timeout, check=True, data=None, stdout=subprocess.PIPE):
         result = subprocess.run(self.SSH + [command], input=data, stdout=stdout, stderr=subprocess.PIPE,
@@ -198,16 +208,17 @@ class MacMini:
         current = self.ssh(f"{self.DOCKER} inspect -f '{{{{.Config.Image}}}} {{{{.State.Running}}}}' {self.CONTAINER} "
                            f"2>/dev/null || true", 60).stdout.decode().split()
         if current[:1] != [image]:
-            print(f'macmini: preparing {image}', flush=True)
+            print(f'{self.name}: preparing {image}', flush=True)
             context = io.BytesIO()
             with tarfile.open(fileobj=context, mode='w', format=tarfile.USTAR_FORMAT) as tar:
                 for name, path in files.items():
                     tar.add(path, arcname=name)
-            build_args = ''.join(f'--build-arg {k}={v} ' for k, v in self.proxy().items())
+            build_args = ''.join(f'--build-arg {shlex.quote(k + "=" + v)} ' for k, v in self.proxy().items())
             self.ssh(f'{self.DOCKER} image inspect {image} >/dev/null 2>&1 || '
-                     f'{self.DOCKER} build -q {build_args}-t {image} -', 7200, data=context.getvalue())
+                     f'{self.DOCKER} build -q {self.platform_flags()}{build_args}-t {image} -',
+                     7200, data=context.getvalue())
             self.ssh(f'{self.DOCKER} rm -f {self.CONTAINER} >/dev/null 2>&1; {self.DOCKER} run -d --name {self.CONTAINER} '
-                     f'--restart unless-stopped -v rungic-build:{BASE} {image} sleep infinity', 300)
+                     f'{self.platform_flags()}--restart unless-stopped -v rungic-build:{BASE} {image} sleep infinity', 300)
         elif current[1:] != ['true']:
             self.ssh(f'{self.DOCKER} start {self.CONTAINER}', 120)
         self.ready = True
@@ -306,14 +317,71 @@ setsid nohup sh -c 'echo $$ > {work}/build.pid; nice -n 10 sh {work}/build.sh > 
                 f'echo ExecMainStatus=$rc; [ "$rc" = 0 ] && echo Result=success || echo Result=exit-code; fi')
 
 
-HOSTS = {'phone': Phone, 'macmini': MacMini}
+class LocalDocker(MacMini):
+    """The same persistent build container through local Docker, with no SSH or emulation.
+
+    Docker Desktop's VM resources, rather than the Mac's CPU/RAM, bound compile jobs.
+    ssh() retains the binary transport interface used by MacMini's file transfers.
+    """
+    name = 'local-docker'
+    DOCKER = 'docker'
+
+    def __init__(self):
+        self.ready = False
+        self.proxy_env = None
+        self._jobs = None
+
+    def ssh(self, command, timeout, check=True, data=None, stdout=subprocess.PIPE):
+        result = subprocess.run(['sh', '-c', command], input=data, stdout=stdout,
+                                stderr=subprocess.PIPE, timeout=timeout)
+        if check and result.returncode:
+            detail = (result.stderr or b'').decode(errors='replace').strip()
+            raise rungic_device.DeviceError(f'Local Docker exit {result.returncode}: {detail}')
+        return result
+
+    @property
+    def jobs(self):
+        if self._jobs is None:
+            result = self.ssh(self.DOCKER + " info --format '{{json .}}'", 30)
+            try:
+                info = json.loads(result.stdout)
+                cpus, memory = int(info['NCPU']), int(info['MemTotal'])
+                if info['Architecture'] not in ('aarch64', 'arm64') or cpus < 1 or memory < 1:
+                    raise ValueError('requires a native ARM64 Docker daemon with positive CPU/RAM limits')
+            except (KeyError, TypeError, ValueError) as error:
+                raise rungic_device.DeviceError(f'Local Docker resources: {error}') from error
+            self._jobs = min(cpus, max(1, memory // (2 * 1024**3)))
+        return self._jobs
+
+    def platform_flags(self):
+        return '--platform linux/arm64 '
+
+    def ensure(self):
+        if not self.ready:
+            # Validate native execution before any image build or container mutation.
+            _ = self.jobs
+        super().ensure()
+
+
+HOSTS = {'phone': Phone, 'macmini': MacMini, 'local-docker': LocalDocker}
 host = Phone()
 
 
-def use(name):
+def use(name, ssh_host=None):
     global host
-    host = HOSTS[name]()
+    if name not in HOSTS:
+        raise SystemExit(f'Unknown build host {name!r}; choose {", ".join(sorted(HOSTS))}')
+    host = MacMini(ssh_host) if name == 'macmini' else HOSTS[name]()
     return host
+
+
+def build_jobs(requested=None):
+    """Cap local Docker jobs even for callers bypassing the CLI (Mesa and project packages)."""
+    if requested is not None and requested < 1:
+        raise SystemExit('compile jobs must be positive')
+    if requested is None:
+        return host.jobs
+    return min(requested, host.jobs) if host.name == 'local-docker' else requested
 
 
 def stage(component):
@@ -365,12 +433,16 @@ def arch_only(component):
 
 
 def start(component, mode, jobs, targets=(), lto=True, cmake_args=()):
+    jobs = build_jobs(jobs)
     work = f'{BASE}/{component}'
     maint = '' if lto else ' DEB_BUILD_MAINT_OPTIONS=optimize=-lto'
     obj = f'{work}/src/obj-aarch64-linux-gnu'
     if mode == 'targets' and component_uses_meson(component):
         build = f'{work}/build'
-        steps = (f"cd {work} && (test -f {build}/build.ninja || meson setup {build} src $(cat {work}/meson-options)) && "
+        # Persistent trees may predate a driver/LLVM option change. Reconfigure
+        # with the staged options instead of silently keeping the KGSL-only build.
+        steps = (f"cd {work} && meson setup $(test ! -f {build}/build.ninja || echo --reconfigure) "
+                 f"{build} src $(cat {work}/meson-options) && "
                  f"ninja -C {build} -j {jobs} {' '.join(targets)}")
     elif mode == 'targets':
         build = f'{work}/build'
@@ -471,19 +543,25 @@ def main():
     parser.add_argument('--cmake-arg', action='append', default=[], help='extra configure argument (targets mode)')
     parser.add_argument('--host', choices=sorted(HOSTS), default=os.environ.get('RUNGIC_BUILD_HOST', 'macmini'),
                         help='where to build (default $RUNGIC_BUILD_HOST, else macmini)')
-    parser.add_argument('--jobs', type=int, help='compile jobs (phone 4: 8 cores, ~7 GiB RAM, and builds push it to '
-                        'thermal throttling, so more jobs gain little; macmini 10)')
+    parser.add_argument('--ssh-host', help='remote macmini USER@HOST (default $RUNGIC_BUILD_SSH, else original owner)')
+    parser.add_argument('--jobs', type=int, help='compile jobs (phone 4, macmini 10; local-docker capped by VM RAM/CPU, max 4)')
     parser.add_argument('--no-lto', action='store_true', help='development build: skip Ubuntu\'s default LTO '
                         '(much faster link; do not use for performance measurements)')
     args = parser.parse_args()
-    use(args.host)
+    if args.host not in HOSTS:
+        parser.error(f'unknown build host {args.host!r}; choose {", ".join(sorted(HOSTS))}')
+    if args.ssh_host and args.host != 'macmini':
+        parser.error('--ssh-host requires --host macmini')
+    if args.jobs is not None and args.jobs < 1:
+        parser.error('--jobs must be positive')
+    use(args.host, args.ssh_host)
     if args.action in ('full', 'incremental', 'targets'):
         if args.action == 'targets' and not args.target and not component_uses_meson(args.component):
             parser.error('targets mode needs --target (a meson tree builds everything without one)')
         sync(args.component)
         if args.action == 'full':
             print(build_deps(args.component))
-        start(args.component, args.action, args.jobs or host.jobs, args.target, not args.no_lto, args.cmake_arg)
+        start(args.component, args.action, build_jobs(args.jobs), args.target, not args.no_lto, args.cmake_arg)
     elif args.action == 'divert':
         print(divert(args.component, args.file))
     elif args.action == 'status':
