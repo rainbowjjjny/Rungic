@@ -4,7 +4,7 @@
 
 以产品功能和用户场景为骨架：每条功能是用户能感知的一件事；“体验”是它必须做到的，每条都标明由什么检查（自动测试、实机验收、人工验证或已登记的缺口）。数据在 `quality/`，规则见 [quality/README.md](../quality/README.md)。
 
-共 161 条功能、684 条体验，其中 640 条有检查。
+共 161 条功能、687 条体验，其中 643 条有检查。
 
 ## Agent 能力
 
@@ -664,8 +664,13 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 - **E3** 应用抽屉滑动时 Surface 呈现间隔超过 12.6 ms 的比例低于 1%（GLES 合成）。（实机验收、人工；只能在手机上看：呈现间隔是手机 GPU 与安卓刷新下的性能，只能在手机上量）
 - **E4** 系统 Mesa 的包不会被发行版更新覆盖，升级 Mesa 后 KWin 不会因图形复位而中止。（缺口：只能在手机上换包重启工作区验证；没有自动检查）
 - **E5** 同一 Mesa 配方包含 virgl（virpipe/vtest，经 Android 服务访问 husky Mali）、softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL）；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND，Flatpak GL 扩展保留自己的驱动与 LLVM 覆盖。（单元测试）
+- **E6** 无 KGSL 的手机由 Rungic 应用在会话启动前看护 vtest；socket 就绪才写 running，连续五次快速失败后停止重试、删除 socket 并写 failed，Linux 可选择 llvmpipe；停止会话会停止服务。KGSL 手机不启动 vtest。（单元测试）
+- **E7** Android vtest 从固定且校验摘要的 virglrenderer 1.3.0 与 libepoxy 1.5.10 源码和补丁队列构建，使用系统 surfaceless EGL/GLES 与 API30 memfd，作为 APK 原生库目录里的 PIE 执行文件发布。（单元测试）
+- **E8** 无 KGSL 时，仅在 vtest.state 为 running、socket 存在且限时 EGL 探测报告 virgl 渲染器后，应用才选择 virpipe；探测失败、超时或服务失效则保持 llvmpipe，清除会话及用户管理器中的旧 virpipe 设置。Qualcomm 保持 KGSL，KWin 始终不使用 virpipe；容器不增加 Mali 设备访问。（单元测试）
 
 注意：
+- virpipe 多个 Qt 渲染线程共用一个 vtest socket，必须按完整事务加锁；连接失败须在协议 I/O 前返回并让建屏失败。B1 只准备 Mesa 构建与补丁，不启用会话；显式 GALLIUM_DRIVER=virpipe 不自动回退 llvmpipe，服务启动、探测和会话恢复仍待集成。容器禁止挂载或打开 /dev/mali0（kbase PID 命名空间 panic），GPU 访问留在 Android init PID 命名空间。 [docs/108-husky-port.md](../docs/108-husky-port.md)
+- M5 B2 仅完成服务端构建与 App 看护；App 域下 EGL、memfd 跨域传递、Mali 画面与性能尚待实机核验，客户端 virpipe 探测/失效后的 plasmashell 回退属于 B3。running 只表示监听 socket 出现，Linux 仍须实际探测；App 被强杀后状态可能陈旧。容器不得挂载 /dev/mali0（kbase PID namespace panic）。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 - M5 B3 只完成 Linux 能力选择与崩溃后重试；依赖 Android supervisor（B2）发布单行 running/failed 状态（用户已确认格式）、Mesa 编入 virgl 并修复事务锁/断连。真实 EGL 输出、app 域共享内存与服务消失后客户端不挂起仍待实机验收；不能把离线环境测试称为 GPU 加速已部署。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 - KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。 [docs/research/74-vaapi-feasibility.md](../docs/research/74-vaapi-feasibility.md) [docs/research/93-xwayland-kgsl-gpu.md](../docs/research/93-xwayland-kgsl-gpu.md)
 - 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md) [docs/108-husky-port.md](../docs/108-husky-port.md)

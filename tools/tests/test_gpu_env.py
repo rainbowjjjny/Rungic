@@ -162,7 +162,7 @@ def virgl(tmp_path):
         yield probe, state, shared / 'vtest.sock', eglinfo, env
 
 
-# covers: apps.gpu/E6
+# covers: apps.gpu/E8
 @pytest.mark.parametrize('failure', ['none', 'no-newline', 'failed', 'missing-state', 'missing-socket',
                                      'regular-socket', 'wrong-renderer', 'exit-failure', 'timeout',
                                      'extra-newline', 'extra-line', 'whitespace', 'empty', 'unreadable', 'nul'])
@@ -211,7 +211,7 @@ def test_husky_virgl_requires_live_egl_and_falls_back_without_stale_overrides(tm
         assert 'GALLIUM_DRIVER' not in env and 'VTEST_SOCKET_NAME' not in env
 
 
-# covers: apps.gpu/E2 apps.gpu/E6
+# covers: apps.gpu/E2 apps.gpu/E8
 def test_qualcomm_never_probes_or_inherits_virpipe(tmp_path):
     # The new husky path must not intercept Qualcomm's working freedreno/KGSL path.
     probe = tmp_path / 'probe'
@@ -225,7 +225,7 @@ def test_qualcomm_never_probes_or_inherits_virpipe(tmp_path):
     assert not attempted.exists(), 'Qualcomm must not depend on the husky vtest server'
 
 
-# covers: apps.gpu/E6 install.login-environment/E2
+# covers: apps.gpu/E8 install.login-environment/E2
 def test_login_profile_cannot_restore_dead_virpipe_after_capability_selection(tmp_path):
     # session reads the login profile after gpu-env; old user exports must not
     # undo a failed probe and send the shell back into M5's crash loop.
@@ -237,7 +237,7 @@ def test_login_profile_cannot_restore_dead_virpipe_after_capability_selection(tm
     assert 'GALLIUM_DRIVER' not in env and 'VTEST_SOCKET_NAME' not in env
 
 
-# covers: apps.gpu/E6
+# covers: apps.gpu/E8
 def test_missing_probe_keeps_llvmpipe_and_clears_inherited_virpipe(tmp_path):
     # Older/partial installations must still offer the CPU GL desktop on husky.
     env = session({'PATH': '/usr/bin:/bin', 'GALLIUM_DRIVER': 'virpipe',
@@ -246,7 +246,7 @@ def test_missing_probe_keeps_llvmpipe_and_clears_inherited_virpipe(tmp_path):
     assert 'GALLIUM_DRIVER' not in env and 'VTEST_SOCKET_NAME' not in env
 
 
-# covers: apps.gpu/E6 desktop.session/E4
+# covers: apps.gpu/E8 desktop.session/E4
 def test_session_imports_virgl_and_clears_manager_before_failed_probe(tmp_path):
     source = (ROOT / 'desktop/session').read_text()
     source = source[source.index('# The GPU settings into the user manager'):source.index('# Qt picks the platform theme')]
@@ -265,7 +265,7 @@ def test_session_imports_virgl_and_clears_manager_before_failed_probe(tmp_path):
                    for c in commands[:-1])
 
 
-# covers: apps.gpu/E6
+# covers: apps.gpu/E8
 def test_kwin_never_uses_virpipe_even_with_working_probe(tmp_path, virgl):
     # KWin has no virgl buffer integration: husky uses QPainter/SHM, Adreno keeps KGSL.
     probe, _, _, _, base_env = virgl
@@ -287,7 +287,7 @@ def test_kwin_never_uses_virpipe_even_with_working_probe(tmp_path, virgl):
         assert env['KWIN_COMPOSE'] == ('O2ES' if kgsl else 'Q')
 
 
-# covers: apps.gpu/E6 desktop.session/E6
+# covers: apps.gpu/E8 desktop.session/E6
 def test_plasmashell_reprobes_each_restart_and_rewrites_manager(tmp_path, virgl):
     # M5's dead-server prototype lost the shell after 3 crashes in 60 s. Each retry
     # needs a fresh capability decision so husky recovers on llvmpipe and can use virgl again.
@@ -323,7 +323,7 @@ def test_plasmashell_reprobes_each_restart_and_rewrites_manager(tmp_path, virgl)
             assert 'GALLIUM_DRIVER' not in env and 'VTEST_SOCKET_NAME' not in env
 
 
-# covers: desktop.session/E6 apps.gpu/E6
+# covers: desktop.session/E6 apps.gpu/E8
 def test_probe_and_recovery_are_shipped_and_retries_are_paced():
     # Keep upstream's Type=dbus, bus name, --no-respawn and on-failure lifecycle.
     # Disable the 3/60s latch, but pace retries to avoid a busy crash loop.
@@ -341,7 +341,7 @@ def test_probe_and_recovery_are_shipped_and_retries_are_paced():
     assert '/usr/lib/systemd/user/plasma-plasmashell.service.d/' in build
 
 
-# covers: apps.gpu/E6
+# covers: apps.gpu/E8
 def test_probe_rejects_regular_file_with_real_socket_predicate(tmp_path):
     # Even in a sandbox without bind permission, exercise the production -S gate:
     # a leftover regular file named vtest.sock is not an Android vtest service.
@@ -353,7 +353,7 @@ def test_probe_rejects_regular_file_with_real_socket_predicate(tmp_path):
     assert done.returncode != 0
 
 
-# covers: apps.gpu/E6 desktop.session/E6
+# covers: apps.gpu/E8 desktop.session/E6
 def test_config_package_installs_executable_probe_and_recovery(tmp_path):
     # A source-only probe would silently leave every Mali session on llvmpipe.
     # Run the actual package recipe with GNU install, also on macOS.
