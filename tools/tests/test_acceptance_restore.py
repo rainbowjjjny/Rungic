@@ -209,3 +209,15 @@ def test_an_output_matching_neither_render_nor_panel_size_fails(phone):
     # Without the app's display file the panel size is still the reference.
     geometry_phone(phone, (1008, 2244), {})
     assert acc.display_geometry({})['passed']
+
+
+# covers: delivery.acceptance/E3
+def test_the_drawer_search_field_is_found_in_a_chinese_session():
+    # plasmashell names the drawer's search field in the session's language: "搜索" in the
+    # zh_CN container on husky. Looking only for "Search" reported an open drawer as closed.
+    import ui_launch_check as ui
+    root = Path(__file__).resolve().parents[2]
+    pattern = re.compile(ui.SEARCH_FIELD, re.I)  # rungic-a11y matches names this way
+    assert pattern.search('搜索') and pattern.search('Search')
+    for path in (root / 'tools/ui_launch_check.py', root / 'tools/rungic_acceptance.py'):
+        assert "name='Search'" not in path.read_text(), path

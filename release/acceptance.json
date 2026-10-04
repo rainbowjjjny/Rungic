@@ -219,8 +219,14 @@
       "check": "input_text",
       "params": {
         "text": "Calcul",
-        "expect": "Calculator",
-        "absent": "Clock"
+        "expect": [
+          "Calculator",
+          "计算器"
+        ],
+        "absent": [
+          "Clock",
+          "时钟"
+        ]
       },
       "title": "Android text input reaches the focused drawer search, which filters to the matching app",
       "covers": [

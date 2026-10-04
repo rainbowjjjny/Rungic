@@ -45,6 +45,8 @@ def press(name):
 # One AT-SPI query through adb takes about 3 s (two container round trips): a position counts as
 # settled after two equal queries, so waits leave room for at least three.
 SETTLE_TIMEOUT = 15
+# The drawer's search field, named in the session's language (rungic-a11y: case-insensitive regex).
+SEARCH_FIELD = 'Search|搜索'
 
 
 def open_drawer(timeout=SETTLE_TIMEOUT):
@@ -65,7 +67,7 @@ def open_drawer(timeout=SETTLE_TIMEOUT):
     previous, deadline = None, time.monotonic() + timeout
     while time.monotonic() < deadline:
         time.sleep(0.3)
-        fields = rungic_agent.ui_find('plasmashell', role='text', name='Search')
+        fields = rungic_agent.ui_find('plasmashell', role='text', name=SEARCH_FIELD)
         current = tuple(fields[0]['extents']) if fields else None
         if current and current == previous and current[1] >= 0:
             return
@@ -91,7 +93,7 @@ def scroll_drawer_to_top(app, attempts=3):
     """The drawer keeps its scroll position (benchmarks swipe it). An entry scrolled
     under the search field still reports extents, and a tap there hits the field."""
     for _ in range(attempts):
-        fields = rungic_agent.ui_find('plasmashell', role='text', name='Search')
+        fields = rungic_agent.ui_find('plasmashell', role='text', name=SEARCH_FIELD)
         labels = [n for n in rungic_agent.ui_find('plasmashell', role='label', name=f'^{app}$')
                   if n.get('extents', [0, 0, 0, 0])[2] > 0]
         if not fields or not labels:
@@ -111,7 +113,7 @@ def launch(app, process, search):
         scroll_drawer_to_top(app)
     if search:
         # Kirigami's search field exposes no EditableText interface: focus it, type through Android input.
-        field = [f for f in rungic_agent.ui_find('plasmashell', role='text', name='Search')]
+        field = [f for f in rungic_agent.ui_find('plasmashell', role='text', name=SEARCH_FIELD)]
         if not field:
             raise RuntimeError('drawer search field not showing')
         rungic_agent.ui_press('plasmashell', field[0]['path'], 'SetFocus')

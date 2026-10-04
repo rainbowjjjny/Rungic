@@ -253,7 +253,7 @@ def _home():
         # Native Folio home has no custom handle. Home toggles its drawer, so do
         # not press it when the desktop is already focused and search is closed.
         if any(w['active'] and w['resource_class'] == 'plasmashell' for w in rungic_agent.ui_windows()) \
-                and not rungic_agent.ui_find('plasmashell', role='text', name='Search'):
+                and not rungic_agent.ui_find('plasmashell', role='text', name=ui.SEARCH_FIELD):
             break
         ui.press('Home')
         time.sleep(0.8)
@@ -267,7 +267,7 @@ def _drawer_search():
     except RuntimeError:
         _home()
         ui.open_drawer()
-    fields = rungic_agent.ui_find('plasmashell', role='text', name='Search')
+    fields = rungic_agent.ui_find('plasmashell', role='text', name=ui.SEARCH_FIELD)
     if not fields:
         raise RuntimeError('drawer search field not showing')
     return fields[0]
@@ -299,6 +299,10 @@ def ocr_screen():
 def input_text(ctx, text='Calcul', expect='Calculator', absent='Clock'):
     """Android text input into the drawer search, read back from the screen by OCR: right after a
     session restart the results never reach the AT-SPI tree, and the search field exposes no text."""
+    import ui_launch_check as ui
+    # App names follow the session's language ("Calculator" or "计算器"): any of the names counts.
+    expect = [expect] if isinstance(expect, str) else list(expect)
+    absent = [absent] if isinstance(absent, str) else list(absent)
     enabled = rungic_agent.a11y('state')['enabled']
     if not enabled:
         rungic_agent.ui_enable(True)
@@ -309,7 +313,7 @@ def input_text(ctx, text='Calcul', expect='Calculator', absent='Clock'):
         for taps in range(1, 4):
             rungic_agent.ui_tap('plasmashell', field['path'])
             focused = wait_for(lambda: any('focused' in f.get('states', []) for f in
-                                           rungic_agent.ui_find('plasmashell', role='text', name='Search')),
+                                           rungic_agent.ui_find('plasmashell', role='text', name=ui.SEARCH_FIELD)),
                                timeout=3, interval=0.3)
             if focused:
                 break
@@ -322,8 +326,10 @@ def input_text(ctx, text='Calcul', expect='Calculator', absent='Clock'):
         seen = [w for w, score, (x, y) in words if y < top + 600]
         # Case-insensitive: right after a container start the first Android key input sometimes
         # arrives with the wrong case ("CaICUL"); that is recorded, text delivery is what is checked.
-        typed = [w for w in seen if w.lower().startswith(text.lower()) and not w.lower().startswith(expect.lower())]
-        return result(bool(typed) and expect in seen and absent not in seen, {'taps': taps}, sent=text,
+        typed = [w for w in seen if w.lower().startswith(text.lower())
+                 and not any(w.lower().startswith(e.lower()) for e in expect)]
+        found = any(e in seen for e in expect) and not any(a in seen for a in absent)
+        return result(bool(typed) and found, {'taps': taps}, sent=text,
                       case_exact=any(w.startswith(text) for w in typed), seen=seen[:20])
     finally:
         try:
