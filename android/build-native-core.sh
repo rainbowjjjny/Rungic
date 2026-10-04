@@ -35,3 +35,8 @@ cargo build --manifest-path "$task_native/Cargo.toml" --locked --lib --release -
 mkdir -p "$task_native_out"
 [ "$RUNGIC_XKBCOMMON_LIB" -ef "$task_native_out/libxkbcommon.so" ] || cp "$RUNGIC_XKBCOMMON_LIB" "$task_native_out/libxkbcommon.so"
 cp "$CARGO_TARGET_DIR/aarch64-linux-android/release/libuniffi_winland_core.so" "$task_native_out/"
+# libuniffi_winland_core.so needs libc++_shared.so, which Android does not provide (docs/79):
+# ship the one from the NDK it was linked against; refuse an output without it.
+task_cxx=${RUNGIC_ANDROID_SYSROOT:+$RUNGIC_ANDROID_SYSROOT/usr/lib/aarch64-linux-android/libc++_shared.so}
+if [ -n "$task_cxx" ] && [ -f "$task_cxx" ]; then cp "$task_cxx" "$task_native_out/"; fi
+[ -s "$task_native_out/libc++_shared.so" ] || { echo "libc++_shared.so missing from $task_native_out" >&2; exit 1; }
