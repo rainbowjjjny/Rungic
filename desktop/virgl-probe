@@ -1,0 +1,21 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# No Mali device access here: vtest owns the GPU in Android's init PID namespace.
+# vtest.state is an atomically published single line: running, starting or failed.
+state=/mnt/android-wayland/vtest.state
+socket=/mnt/android-wayland/vtest.sock
+[ -f "$state" ] && [ -S "$socket" ] || exit 1
+# Compare bytes: shell command substitution strips newlines and may drop NULs.
+# B2 publishes exactly running, with at most its line-ending newline.
+printf 'running' | cmp -s - "$state" || printf 'running\n' | cmp -s - "$state" || exit 1
+# A stale KGSL/software override must not decide the capability of virpipe.
+unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_ALWAYS_SOFTWARE
+# A broken Mesa client may crash or ignore TERM; do not create cores or wait forever.
+ulimit -c 0
+if info=$(timeout -k 1s 2s env EGL_PLATFORM=surfaceless GALLIUM_DRIVER=virpipe \
+    VTEST_SOCKET_NAME="$socket" eglinfo -B 2>/dev/null); then
+    printf '%s\n' "$info" | LC_ALL=C grep -Eq \
+        '^[[:space:]]*OpenGL.*renderer( string)?:[[:space:]]*virgl([[:space:](]|$)'
+else
+    exit 1
+fi

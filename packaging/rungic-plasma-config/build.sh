@@ -11,6 +11,9 @@ install -Dm644 "$SRC/system/network-manager.conf" "$DESTDIR/etc/dbus-1/system.d/
 install -Dm644 "$SRC/system/bluetooth.conf" "$DESTDIR/etc/dbus-1/system.d/rungic-android-bluetooth.conf"
 install -Dm644 "$SRC/system/modem-manager.conf" "$DESTDIR/etc/dbus-1/system.d/rungic-android-modem.conf"
 install -Dm644 "$SRC/desktop/gpu-env" "$DESTDIR/etc/plasma/gpu-env"
+install -Dm755 "$SRC/desktop/virgl-probe" "$DESTDIR/usr/libexec/rungic-virgl-probe"
+install -Dm755 "$SRC/desktop/plasmashell-gpu-refresh" "$DESTDIR/usr/libexec/rungic-plasmashell-gpu-refresh"
+install -Dm644 "$SRC/desktop/plasmashell-gpu.conf" "$DESTDIR/usr/lib/systemd/user/plasma-plasmashell.service.d/rungic-gpu.conf"
 install -Dm644 "$SRC/system/pulse.pa" "$DESTDIR/etc/plasma/pulse.pa"
 install -Dm755 "$SRC/system/policy-rc.d" "$DESTDIR/usr/sbin/policy-rc.d"
 # systemd-coredump (for coredumpctl) must never set Android's global core_pattern.

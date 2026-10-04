@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+# ExecStartPre runs on every attempt, including Restart=on-failure. systemd builds
+# the environment for each invoked process, so ExecStart gets this fresh decision.
+# Keep upstream's plasmashell command, Type=dbus and session lifecycle intact.
+. /etc/plasma/gpu-env
+# import-environment skips unset variables: erase the previous capability first.
+# Do not ignore a manager update failure and start with an old virpipe socket.
+systemctl --user unset-environment GALLIUM_DRIVER VTEST_SOCKET_NAME \
+    MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF FD_KGSL_DMABUF_UBWC \
+    VK_DRIVER_FILES GSK_RENDERER FLATPAK_GL_DRIVERS LIBGL_ALWAYS_SOFTWARE
+systemctl --user import-environment GALLIUM_DRIVER VTEST_SOCKET_NAME \
+    MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF VK_DRIVER_FILES \
+    QSG_RHI_BACKEND QT_QUICK_BACKEND KWIN_COMPOSE GSK_RENDERER FLATPAK_GL_DRIVERS

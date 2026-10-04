@@ -4,7 +4,7 @@
 
 以产品功能和用户场景为骨架：每条功能是用户能感知的一件事；“体验”是它必须做到的，每条都标明由什么检查（自动测试、实机验收、人工验证或已登记的缺口）。数据在 `quality/`，规则见 [quality/README.md](../quality/README.md)。
 
-共 161 条功能、683 条体验，其中 639 条有检查。
+共 161 条功能、684 条体验，其中 640 条有检查。
 
 ## Agent 能力
 
@@ -655,18 +655,18 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 
 #### 应用在手机 GPU 上绘制（OpenGL / GLES）
 
-`apps.gpu` · Linux 系统功能 — 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 的手机保留软件渲染默认，Mesa 不强制选择 KGSL。
+`apps.gpu` · Linux 系统功能 — 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 时经探测选择 virgl，服务不可用则保持 llvmpipe。
 
 经由接口：`kwin-android-host`
 
 - **E1** 有 KGSL 的 Adreno 710 手机上，普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（单元测试、人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
-- **E2** 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（Mesa llvmpipe，软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
+- **E2** 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（服务可用时 virgl，否则 Mesa llvmpipe；软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
 - **E3** 应用抽屉滑动时 Surface 呈现间隔超过 12.6 ms 的比例低于 1%（GLES 合成）。（实机验收、人工；只能在手机上看：呈现间隔是手机 GPU 与安卓刷新下的性能，只能在手机上量）
 - **E4** 系统 Mesa 的包不会被发行版更新覆盖，升级 Mesa 后 KWin 不会因图形复位而中止。（缺口：只能在手机上换包重启工作区验证；没有自动检查）
 - **E5** 同一 Mesa 配方包含 virgl（virpipe/vtest，经 Android 服务访问 husky Mali）、softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL）；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND，Flatpak GL 扩展保留自己的驱动与 LLVM 覆盖。（单元测试）
 
 注意：
-- M5 B2 仅完成服务端构建与 App 看护；App 域下 EGL、memfd 跨域传递、Mali 画面与性能尚待实机核验，客户端 virpipe 探测/失效后的 plasmashell 回退属于 B3。running 只表示监听 socket 出现，Linux 仍须实际探测；App 被强杀后状态可能陈旧。容器不得挂载 /dev/mali0（kbase PID namespace panic）。 [docs/108-husky-port.md](../docs/108-husky-port.md)
+- M5 B3 只完成 Linux 能力选择与崩溃后重试；依赖 Android supervisor（B2）发布单行 running/failed 状态（用户已确认格式）、Mesa 编入 virgl 并修复事务锁/断连。真实 EGL 输出、app 域共享内存与服务消失后客户端不挂起仍待实机验收；不能把离线环境测试称为 GPU 加速已部署。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 - KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。 [docs/research/74-vaapi-feasibility.md](../docs/research/74-vaapi-feasibility.md) [docs/research/93-xwayland-kgsl-gpu.md](../docs/research/93-xwayland-kgsl-gpu.md)
 - 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md) [docs/108-husky-port.md](../docs/108-husky-port.md)
 - 2026-09-26 全局把 Qt Quick 改成 Vulkan 后语音助手整屏灰色闪帧，当天撤回；评估渲染后端必须做逐帧画面检测，不能只看帧间隔和 CPU。 [docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)
@@ -2009,8 +2009,10 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - **E3** 新会话等上一个会话的 startplasma-wayland 真正退出后才设置环境，plasmashell 总以手机 shell 启动，不会变成桌面版 shell。（系统测试、人工）
 - **E4** GPU 设置、登录 PATH 在任何会话单元启动前导入用户管理器；Qt 按 XDG_CURRENT_DESKTOP 选平台主题，旧会话强加的主题不残留到新会话。（单元测试、实机验收）
 - **E5** 桌面上没有 Linux 锁屏挡住（锁定交给安卓），kaccess 不在没有 X 显示的会话里反复崩溃。（系统测试）
+- **E6** plasmashell 每次启动（含失败重试）重新判断 GPU 能力并更新用户管理器环境，vtest 服务退出后可在 llvmpipe 或 virgl 上恢复；失败重试至少间隔 5 秒，不因三次快速崩溃触发启动限流而永久失去桌面。（单元测试）
 
 注意：
+- GPU 探测只决定下一次启动的后端，不能解救仍存活但挂起的 plasmashell；Android 服务失效通知与 Mesa 断连行为需后续集成验证。取消 plasmashell 启动限流并以 5 秒间隔限制重试，持久的非 GPU 故障也会继续重试，应通过 journal 定位。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 - 上一个会话的 startplasma-wayland 退出时会把用户管理器环境恢复成它启动前的样子，曾删掉 PLASMA_DEFAULT_SHELL，让 plasmashell 以桌面版 shell 启动。 [docs/96-desktop-recovery-after-apk-restart.md](../docs/96-desktop-recovery-after-apk-restart.md)
 - KWin 嵌套后端在宿主断开时 qFatal（上游设计），wrapper 把非 0、非 133 的退出都算崩溃、超过 10 次就不再重启；Qt 的 QT_WAYLAND_RECONNECT 在没有全局对象时重建 surface 会段错误（QTBUG-150287，上游未修），只能靠消除“没有可用 KWin”的空窗来避开。 [docs/57-zero-copy-explicit-sync.md](../docs/57-zero-copy-explicit-sync.md)
 - KWin 退出时 Qt 客户端（plasmashell）在 wl_display_read_events 中崩溃的问题还在，部署工具从新会话就绪时才统计新崩溃。 [docs/72-kwin-android-host-isolation.md](../docs/72-kwin-android-host-isolation.md)
@@ -2018,7 +2020,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - 只看到进程或单元 active 不等于桌面可用；APK 升级后 kactivitymanagerd 曾激活失败，要以实际画面和就绪信号验收。 [docs/research/clipboard-background.md](../docs/research/clipboard-background.md) [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md)
 - 桌面程序要经 user-exec systemd-run --user 继承完整会话环境；直接 user-exec 的环境较小，“不崩溃”不能代替手机模式验证。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md)
 
-文档：[docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md)、[docs/42-plasma-runtime-acceptance.md](../docs/42-plasma-runtime-acceptance.md)、[docs/103-krita-save-dialog-hang.md](../docs/103-krita-save-dialog-hang.md)、[docs/research/31-backend-integration.md](../docs/research/31-backend-integration.md)
+文档：[docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md)、[docs/42-plasma-runtime-acceptance.md](../docs/42-plasma-runtime-acceptance.md)、[docs/103-krita-save-dialog-hang.md](../docs/103-krita-save-dialog-hang.md)、[docs/research/31-backend-integration.md](../docs/research/31-backend-integration.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)
 
 #### 升级时的一次性用户设置迁移
 

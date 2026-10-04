@@ -244,3 +244,6 @@ USB G100 已部署 `20260930.12`：suggestions `0.452`、voice-agent `0.453`、d
 ## 2026-10-05：husky 的 virpipe Mesa 候选（B1，离线验证）
 
 系统 Mesa `+rungic6` 增加 virgl，与原有 freedreno/zink（KGSL/Turnip）及 softpipe/llvmpipe 共存；Flatpak GL 的独立覆盖不变。复用原型 socket 事务锁，并修正 C11 递归锁初始化和销毁；connect 失败在协议 I/O 前返回，winsys 与两种建屏入口干净失败。固定源码队列应用、打包测试和抽取实际 C 函数的离线替身检查通过，尚未构建部署本版本或完成真实 EGL/Qt 验收。显式 virpipe 不自动回退 llvmpipe，服务与会话回退待后续任务；容器不得访问 `/dev/mali0`。完整证据与待验范围见 [108 篇记录](../108-husky-port.md#记录)。
+## 2026-10-05：husky virgl 会话选择与恢复（B3，离线验证）
+
+无 KGSL 的 Qt Quick/plasmashell 仅在 Android vtest 状态为 running、socket 存在且限时 surfaceless EGL 返回 virgl renderer 时选择 virpipe；否则保留 llvmpipe/OpenGL。KWin 保持 QPainter/SHM，Qualcomm 的 KGSL 设置不变。每次 plasmashell 启动前重新探测并清除用户管理器的旧 virpipe；取消该单元启动限流，以 5 秒间隔重试。新 helper/drop-in 由 plasma-config 包安装，登录 profile 不能绕过能力选择。代码、替身恢复测试和真实打包 recipe 临时安装已完成，真实 systemd/手机恢复与 GPU 画面尚未验收；Android supervisor（B2）与配套 Mesa 修复尚需集成；用户已确认 running/failed 单行状态、允许缺失，读取失败和额外内容均回退。容器没有新增 Mali 设备访问；仍存活但挂起的 shell 需 App 失效通知对接，边界与来源见 [108 篇 B3 记录](../108-husky-port.md)。

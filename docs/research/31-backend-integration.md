@@ -598,3 +598,6 @@ G100 ZY32M9MRVP / Android 16 / APK 2.29 开发版通过标准 PA 客户端检查
 ## 2026-10-05：husky 的 vtest 共享图形入口（B1，待集成）
 
 目标链路：Qt Quick/其他 GL 应用 → 系统 Mesa virgl（`GALLIUM_DRIVER=virpipe`）→ vtest Unix socket → Android init PID 命名空间中的 virglrenderer EGL/GLES → Mali；画面仍经 KWin QPainter/SHM → Android 宿主呈现。容器不挂载、不打开 `/dev/mali0`，避免 kbase PID 命名空间 panic。B1 只增加 Mesa 驱动和事务锁/连接失败补丁，尚未启动或选择这条链路；现有 KGSL 与 llvmpipe 路径保留。winsys 连接失败会向调用方报告建屏失败；显式 virpipe 不触发 Mesa 自动换 llvmpipe，服务探测、环境选择与会话恢复须由后续集成处理。固定源码及离线验证、原型与本版本验收的边界见 [108 篇记录](../108-husky-port.md#记录)。
+## 2026-10-05：virgl/vtest 能力与会话环境（B3，未部署）
+
+候选链路：Qt Quick/plasmashell → Mesa virpipe → `/mnt/android-wayland/vtest.sock` → Android init PID 命名空间中的 vtest/EGL → Mali；帧仍走 KWin QPainter/SHM。`vtest.state` 由 Android supervisor（B2）写入；用户已确认单行 running/failed、允许缺失，Linux 只接受准确的 `running` 或 `running\n`。Linux `rungic-virgl-probe` 检查状态/Unix socket，EGL 探测限时 2 秒、TERM 后最多 1 秒强杀，只接受成功退出且 renderer 为 virgl；失败不导出 GALLIUM_DRIVER/VTEST_SOCKET_NAME，沿用 llvmpipe。session 在导入前清除管理器旧值，profile 禁止覆盖这两项，KWin 启动器始终清除 virpipe。plasmashell 的 ExecStartPre 在每次尝试重新探测、同步用户管理器，更新失败则不带旧环境启动；5 秒重试、此单元不设启动限流，保留上游 D-Bus/会话生命周期。Linux 替身验证不是 Android app 域 fd/mmap、真实 systemd 环境时序或断连恢复验收；Android supervisor、配套 Mesa 修复与 App 失效通知尚需集成。不映射或打开 `/dev/mali0`。详细实现、来源和余项见 [108 篇](../108-husky-port.md)。

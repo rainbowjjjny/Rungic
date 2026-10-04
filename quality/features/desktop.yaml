@@ -48,7 +48,11 @@ features:
         text: GPU 设置、登录 PATH 在任何会话单元启动前导入用户管理器；Qt 按 XDG_CURRENT_DESKTOP 选平台主题，旧会话强加的主题不残留到新会话。
       - id: E5
         text: 桌面上没有 Linux 锁屏挡住（锁定交给安卓），kaccess 不在没有 X 显示的会话里反复崩溃。
+      - id: E6
+        text: plasmashell 每次启动（含失败重试）重新判断 GPU 能力并更新用户管理器环境，vtest 服务退出后可在 llvmpipe 或 virgl 上恢复；失败重试至少间隔 5 秒，不因三次快速崩溃触发启动限流而永久失去桌面。
     pitfalls:
+      - text: GPU 探测只决定下一次启动的后端，不能解救仍存活但挂起的 plasmashell；Android 服务失效通知与 Mesa 断连行为需后续集成验证。取消 plasmashell 启动限流并以 5 秒间隔限制重试，持久的非 GPU 故障也会继续重试，应通过 journal 定位。
+        docs: [docs/108-husky-port.md]
       - text: 上一个会话的 startplasma-wayland 退出时会把用户管理器环境恢复成它启动前的样子，曾删掉 PLASMA_DEFAULT_SHELL，让 plasmashell 以桌面版 shell 启动。
         docs: [docs/96-desktop-recovery-after-apk-restart.md]
       - text: KWin 嵌套后端在宿主断开时 qFatal（上游设计），wrapper 把非 0、非 133 的退出都算崩溃、超过 10 次就不再重启；Qt 的 QT_WAYLAND_RECONNECT 在没有全局对象时重建 surface 会段错误（QTBUG-150287，上游未修），只能靠消除“没有可用 KWin”的空窗来避开。
@@ -65,6 +69,8 @@ features:
       - desktop/session
       - desktop/kwin
       - desktop/kwin-override.conf
+      - desktop/plasmashell-gpu-refresh
+      - desktop/plasmashell-gpu.conf
       - desktop/rungic-plasma-session.service
       - desktop/rungic-plasma-shared.service
       - packaging/rungic-plasma-session/
@@ -77,6 +83,7 @@ features:
       - docs/42-plasma-runtime-acceptance.md
       - docs/103-krita-save-dialog-hang.md
       - docs/research/31-backend-integration.md
+      - docs/108-husky-port.md
 
   - id: desktop.settings-migration
     title: 升级时的一次性用户设置迁移
