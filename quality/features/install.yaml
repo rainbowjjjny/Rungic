@@ -626,8 +626,10 @@ features:
     code:
       - profiles/
       - tools/prepare_g100_stock.py
+      - tools/prepare_pixel_stock.py
       - tools/verify_g100_stock.py
       - tools/test_prepare_stock.py
+      - tools/test_prepare_pixel_stock.py
       - tools/ci/preflight.py
       - .agents/skills/rungic-three-stage-image/
       - tools/ci/test_device_preflight.py
