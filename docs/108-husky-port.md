@@ -38,8 +38,8 @@
 |---|---|---|
 | M0 ✅ | 设备事实、spec、原厂基线 | spec 字段全部来自实测；基线模块数与 dmesg 记录在案 |
 | M1 ✅ | LXC GKI 内核 | 0 个 CRC 差异；`fastboot boot` 开机后模块数等于基线、Enforcing、namespaces 可用；用户同意后刷入（2026-10-04 完成） |
-| M2 | 无 KGSL 的软件渲染路径 | 单独计划，M1 完成后编写 |
-| M3 | RungicOS rootfs、APK 与独立安装包 | 单独计划，M1 完成后编写 |
+| M2 | 无 KGSL 的软件渲染路径 | 容器在无 KGSL 时启动；KWin 用 QPainter；Mesa 带 llvmpipe |
+| M3 | RungicOS rootfs、APK 与独立安装包 | 从零构建出 rootfs、APK、安装包，`standalone.py verify` 通过 |
 | M4 | 实机安装与验收 | 到达 Plasma 桌面并可触控 |
 
 M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM 输出），所以先不写细节，避免按假设设计。已知的改动面（详见研究摘要）：
@@ -155,6 +155,62 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 - [x] 开机后检查脚本 `.work/husky/check-kernel.sh`，用 `adb -s 3B271FDJG005G7 shell su < .work/husky/check-kernel.sh` 执行。脚本内容：`uname -r`（必须带候选的版本串，证明确实是新内核）；`getenforce`；`cut -d' ' -f1 /proc/modules | sort`（与基线名单逐个比较，不只比数量）；`zcat /proc/config.gz` 中六项选项；用 busybox `unshare -U -p -i -m -f` 进入新 namespace，检查里面 `$$` 为 1、能写 `/proc/self/uid_map`；用 `ipcmk -Q`/`ipcrm` 验证 SysV IPC 可用；`mount -t devtmpfs` 到临时目录；完整 `dmesg` 存档，并搜索 `Unknown symbol`、`disagrees about version`、`module verification failed`、`Loading of unsigned module`、`protected`。
 - [x] 验收：模块名单与基线完全一致；Enforcing；六项 `=y`；namespace、uid_map、IPC、devtmpfs 都正常；dmesg 无上述错误；触屏、Wi-Fi、显示正常；Magisk `su` 可用。
 - [x] 通过后再次征得用户同意，重新读当前槽位，`fastboot flash boot_<slot>`，重启并复查一次。
+
+## M2：无 KGSL 的软件渲染路径
+
+依据（2026-10-04 代码梳理）：KWin 的 Android 后端在打不开渲染设备时只记警告，退回 QPainter；QPainter 输出走 `/dev/shm` 共享内存缓冲，宿主端用 Android 自己的 EGL/GLES 合成 `RenderItem::Shm`，在 Mali 上可用；触摸输入链路与 GPU 无关。真正挡路的是容器启动对 `/dev/kgsl-3d0` 的硬依赖和写死的 KGSL 环境变量。手机实测：无 `/dev/kgsl*`；`/dev/dri/card0`、`renderD128` 属于显示控制器 `exynos-drm`，没有 3D；GPU 是 Mali-G715（`/dev/mali0`，kbase），Mesa 无可用驱动；屏幕 1008×2244、360 dpi；9 核、12 GB 内存。
+
+Codex 负责 2.1–2.4 的代码与测试；Claude 审查、合并并在 M4 实机验证。
+
+### 任务 2.1：GPU 设备节点改为可选（容器能启动）
+- 修改 `system/rungic-plasma:31-39,169-179`：KGSL 与 `/dev/dma_heap/system` 的 `device_rule` 只在节点存在时添加；节点缺失只打日志，不退出。
+- 修改 `system/plasma.config:44-46`：这两个绑定挂载加 `optional`。
+- 测试：改 `tools/ci/test_container_control.py:139-145`，现在它断言“缺节点就失败”。改为：有 KGSL 时规则齐全；无 KGSL 时容器照常启动，且不添加 KGSL 规则。测试要说明为什么：Mali 等非高通手机必须能启动桌面。
+
+### 任务 2.2：GPU 环境变量按设备选择
+- 修改 `desktop/gpu-env`：只有 `[ -c /dev/kgsl-3d0 ]` 时才导出 KGSL/GL 相关变量；否则保持 `desktop/session:15-16` 的软件默认（`KWIN_COMPOSE=Q`、`QT_QUICK_BACKEND=software`），并确保 `MESA_LOADER_DRIVER_OVERRIDE` 未设置，让 Mesa 选 llvmpipe。
+- `desktop/kwin:17` 的 `FD_KGSL_DMABUF_UBWC` 同样只在 KGSL 存在时设置。
+- 测试：更新 `tools/tests/test_gpu_env.py`，两种设备各一组断言；同步 `quality/features/apps.yaml:131`。
+
+### 任务 2.3：Mesa 增加 CPU 渲染驱动
+- `desktop/mesa-meson-options`：`gallium-drivers` 加 `softpipe,llvmpipe`，`-Dllvm=enabled`。
+- `desktop/package-mesa.py:17-24`：依赖加入对应的 libLLVM 运行库包。
+- `packages/mesa/debian/changelog` 升版本。
+- 原因：Qt Quick 的软件场景图曾让应用抽屉空白（`docs/73:133`），Qt Quick 客户端需要通过 llvmpipe 得到 GL。保持同一个 rootfs 同时支持 Adreno 和 Mali。
+- 验收：在 ARM64 构建容器里编出的包含 `swrast`/`llvmpipe`，`EGL_PLATFORM=surfaceless eglinfo` 或 `glxinfo -B`（llvmpipe）可列出 llvmpipe。
+
+### 任务 2.4：应用端默认渲染尺寸与物理尺寸
+- `android/app/src/.../MainActivity.java:451`：没有 GPU 路径时，默认短边取 720，减轻 CPU 渲染负担。
+- `MainActivity.java:690`：物理尺寸改用 `DisplayMetrics.xdpi/ydpi` 计算，不再写死 151×68 mm。
+- 测试：沿用 `android/app/tests` 的 Java 单测模式，覆盖两种默认值。
+
+### 任务 2.5：验收项按设备能力分级
+- `release/acceptance.json` 中的 `contract.gpu-device`、`recording.quicksetting`、`perf.compositor`、`contract.wifi-display` 依赖 KGSL 或高通 WFD。在没有 KGSL 的设备上标为“不适用”并说明原因，不能删掉检查，也不能把它们当成通过。
+
+## M3：构建链（rootfs、APK、独立安装包）
+
+依据：仓库没有“从零构建”的 rootfs 流程。现有 `build_fingerprinted_rootfs.py` 依赖一棵不在仓库里的二进制基础系统树、APT 包池、Alpine LXC 运行环境和 Termux 组件，GitHub 上也没有发布（10 个 fork 都没有 release）。社区 K40S 套件（`yayoinoyume/Rungic` 分支 `dev/munch-cgroup-fix` 的 `munch-build-kit/rootfs-scripts`）证明可以用 `mmdebstrap` 从零搭 Ubuntu 26.04（resolute）arm64；这也是 `docs/75:38` 提出但未实现的方向。
+
+构建机：用户的 Mac Studio（M1 Ultra 20 核、128 GB、Docker 原生 `linux/aarch64`），ARM64 包和 rootfs 原生编译，不用 QEMU。GCP x86 机器只在需要 linux-x86_64 工具时使用（如 NDK），其余时间停机。
+
+| 任务 | 内容 | 产物 | 负责 |
+|---|---|---|---|
+| 3.1 | ARM64 构建容器：用 `tools/pq/arm64-host.Dockerfile` 在本机 Docker 建镜像；`tools/build_on_device.py` 的构建主机改为可配置，增加本机 Docker 目标（现写死原作者的 Mac mini） | 本机可用的打包环境 | Codex 改代码，Claude 实测 |
+| 3.2 | 编 `release/packages.json` 里 15 个重建包，以及 `rungic_package.py` 管理的 20 个项目包 | 本地 APT 仓库 | Claude 执行，失败交 Codex 排查 |
+| 3.3 | 新工具：用 mmdebstrap 按 `rungic-release` 元包闭包，从零搭 arm64 root 树（实现 `docs/75:38`），再交给 `build_rootfs_image.py` | rootfs 镜像、包锁、报告 | Codex 写工具，Claude 执行 |
+| 3.4 | Alpine LXC 运行环境、静态 `rungic_lxc_enter`/`rungic_plasma_enter`、cast JAR，做 host seed | host seed 与报告 | Codex + Claude |
+| 3.5 | Termux 依赖（`termux.apk`、带 PulseAudio 的 prefix）和 `rungic-sparse-write`，全部从官方来源下载并固定哈希 | deps | Claude |
+| 3.6 | APK：Rust 宿主（`aarch64-linux-android`）、`libxkbcommon`（可参考社区脚本）、`build-apk.sh`；改掉写死的 NDK 路径和代理 | `rungic.apk` | Codex 改脚本，Claude 构建 |
+| 3.7 | 为 husky 生成 `kernel-report.json`（`kernel_banner`、`boot_sha256`、`boot_bytes`），用工具生成，不手写 | 内核报告 | Codex |
+| 3.8 | `standalone.py pack` + `verify` | 独立安装包 | Claude |
+
+M3 的每个任务开始前，先把它展开成带验收命令的步骤，写进本文件。
+
+## M4：实机安装与验收
+
+- `standalone.py install` 到 husky（不清数据）；之后按 SKILL 的验收顺序逐项核对：base ready → payload verified → install/mount → release ready → account-prepare → account form → desktop loading → Plasma。
+- 终点：Plasma 桌面出现，触摸可操作，`tools/rungic_acceptance.py` smoke 级通过，并截图存档。
+- 已知会降级的功能（QPainter 下）：截屏/录屏、部分 KWin QML 特效。记录下来，不算作失败。
 
 ## 记录
 
