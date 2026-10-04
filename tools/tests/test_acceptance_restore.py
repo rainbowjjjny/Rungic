@@ -176,3 +176,36 @@ def test_the_report_and_its_manual_items(tmp_path, monkeypatch):
     manual = ' '.join(saved['manual']).lower()
     for item in ('image quality', 'acoustic', 'synchronisation', 'pinyin', 'casting'):
         assert item in manual, item
+
+
+def geometry_phone(phone, output, display):
+    def answer(script):
+        if script.startswith('kscreen-doctor -j'):
+            return Result(json.dumps({'outputs': [{
+                'name': 'WL-0', 'enabled': True, 'scale': 2, 'rotation': 1, 'currentModeId': '1',
+                'modes': [{'id': '1', 'size': {'width': output[0], 'height': output[1]}, 'refreshRate': 120}]}]}))
+        if 'android-display.json' in script:
+            return Result(json.dumps(display))
+        if script.startswith('wm size'):
+            return Result('Physical size: 1008x2244')
+        return Result()
+    phone.answers = {'': answer}
+
+
+# covers: delivery.acceptance/E3
+def test_the_phone_output_may_use_the_render_size_the_app_chose(phone):
+    # Without KGSL the app renders a 720 short edge for CPU rendering (husky); the output then
+    # matches the app's render size, not the panel's native 1008x2244.
+    geometry_phone(phone, (720, 1602), {'renderWidth': 720, 'renderHeight': 1602})
+    row = acc.display_geometry({})
+    assert row['passed'], row
+    assert row['metrics']['refresh_hz'] == 120
+
+
+# covers: delivery.acceptance/E3
+def test_an_output_matching_neither_render_nor_panel_size_fails(phone):
+    geometry_phone(phone, (800, 1600), {'renderWidth': 720, 'renderHeight': 1602})
+    assert not acc.display_geometry({})['passed']
+    # Without the app's display file the panel size is still the reference.
+    geometry_phone(phone, (1008, 2244), {})
+    assert acc.display_geometry({})['passed']

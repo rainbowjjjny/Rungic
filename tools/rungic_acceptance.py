@@ -231,9 +231,14 @@ def display_geometry(ctx):
         if mode:
             outputs.append({'name': o['name'], 'size': [mode['size']['width'], mode['size']['height']],
                             'scale': o.get('scale'), 'rotation': o.get('rotation'), 'refresh': mode.get('refreshRate')})
-    phone = [o for o in outputs if sorted(o['size']) == sorted(android or ())]
+    # The phone output has the panel's size, or the render size the app chose (a 720 short edge
+    # on phones that render on the CPU, MainActivity/DisplayGeometry).
+    host = _host_display()
+    render = (host.get('renderWidth'), host.get('renderHeight'))
+    sizes = [sorted(android or ())] + ([sorted(render)] if all(render) else [])
+    phone = [o for o in outputs if sorted(o['size']) in sizes]
     return result(bool(phone), {'refresh_hz': phone[0]['refresh'] if phone else None},
-                  android=android, outputs=outputs)
+                  android=android, render=list(render) if all(render) else None, outputs=outputs)
 
 
 def _home():
