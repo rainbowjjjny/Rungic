@@ -115,6 +115,26 @@ class BuildCacheTests(unittest.TestCase):
         (self.root / 'source').unlink(); (self.root / 'source').symlink_to('dep')
         self.assertNotEqual(before, b.inputs(self.recipe, self.root))
 
+    # covers: delivery.build-fingerprint/E2
+    def test_native_xattrs_invalidate_without_following_links(self):
+        path = self.root / 'source'
+        name = 'com.rungic.build-test' if sys.platform == 'darwin' else 'user.rungic-build-test'
+        def set_attr(value):
+            if sys.platform == 'darwin':
+                subprocess.run(['/usr/bin/xattr', '-w', name, value, str(path)], check=True)
+            else:
+                os.setxattr(path, name, value.encode())
+        set_attr('first')
+        self.assertEqual(b.content(path)['xattrs'][name], b'first'.hex())
+        first = b.inputs(self.recipe, self.root)
+        set_attr('second')
+        self.assertNotEqual(first, b.inputs(self.recipe, self.root))
+        link = self.root / 'link'
+        link.symlink_to(path.name)
+        self.assertNotIn(name, b.xattrs(link))
+        path.unlink()
+        self.assertEqual(b.content(link)['kind'], 'symlink')
+
     # covers: delivery.build-fingerprint/E3
     def test_forged_record_and_output_traversal_rejected(self):
         report = self.build()['report']

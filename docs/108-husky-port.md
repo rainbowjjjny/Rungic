@@ -293,7 +293,33 @@ docker run --rm --mount type=volume,src=rungic-rootfs,dst=/output,readonly \
 - 终点：Plasma 桌面出现，触摸可操作，`tools/rungic_acceptance.py` smoke 级通过，并截图存档。
 - 已知会降级的功能（QPainter 下）：截屏/录屏、部分 KWin QML 特效。记录下来，不算作失败。
 
+### 任务 3.8 准备：Mac 实际构建配方与 build plan（2026-10-04）
+
+- [x] 新增 `tools/ci/husky_build_plan.py`：生成四份 `build_artifact` 配方，逐个执行并验证，在全部记录通过 `standalone.collect_build_manifest` 后才发布计划。`components` 每项为 `{recipe, directory}`，`bindings` 严格为 `rootfs.img.gz`、`host-seed.tar.gz`、`rungic.apk`、`rungic-sparse-write`。
+- [x] 配方沿用本机已用命令：NDK 28.2 的 Android API 31 静态稀疏写入器；stable ARM64 Rust 的 `build-native-core.sh` 后接 Homebrew Bash 的 `build-apk.sh`（OCR none、开发签名）；Linux Docker 的 mmdebstrap → `build_rootfs_image.py --inside`；`build_enter.sh` 和投屏构建脚本后接 `build_host_seed.py --inside`。`RUNGIC_ENTER_OUT` 新增可选输出目录，其余 JNI/Cargo/APK/cast 输出用已有覆盖变量，全部新产物在执行器的 pending 工作目录生成，成功后发布内容寻址记录。没有导入今天的成品作为新的源码构建命中。
+- [x] 输入策略写在模块 docstring：源码/固定上游配方/补丁按内容、模式、链接和 xattr；NDK、Rust、JDK、SDK 工具按安装内容；libxkbcommon 1.13.1 的已编译 `.so` 以生成配方时的 SHA256 固定，另记录 Meson cross file，属于二进制输入，不补造其历史编译证明；Alpine 3.22.6/LXC 6.0.4-r0 runtime 固定为 `1401a42399462cef33db09b7ce47542c35aaa747faeb185bd0309ca3a541bba4`；本地 APT 仓库同样作为二进制输入。Docker bootstrap 与 pq 工具镜像记录现场 inspect 的完整 `sha256:` image ID，rootfs/host 用该 ID 运行，pq 标签在 native 准备前后核对。
+- [x] rootfs 消费 volume 中今天保留的 `/output/husky-20261004.1/debs` 和完整包锁，按 3.3 的重放入口重新 bootstrap；不是缺失的旧作者 binary baseline。Linux 内按 `ownership=True` 核对 deb 池与锁的输入身份，构建前后都核验。host 消费这次 image builder 新生成的 `image/root-tree`（已有排除与身份清理步骤），将树的 Linux 属主/内容身份和位置作为 rootfs 记录输出，再通过带 `build.json` 的依赖绑定；host 使用前后及计划发布前重新核验树。完整树与 runtime 始终在 Linux volume 中处理，仅配方命令把新压缩镜像、seed 和报告导出到 Mac 记录目录。失败工作目录保留，不覆盖原来的 `husky-20261004.1`，不清理其他任务。
+- [ ] Claude 在有 Docker socket 的会话运行下列命令。工具现场核验主机、路由、系统代理与 Docker ARM64；loopback 代理转为 `host.docker.internal`，传入 Docker。现有 `rungic-rootfs-bootstrap:26.04` 与 `rungic-pq:26.04` 必须在手，3.3 的完整 deb 池/锁必须保留；按锁重放仍需要可访问的兼容 archive。不会重建 Docker 工具镜像、访问 adb 或自动安装手机。
+
+在**本工作树**运行，二进制输入读主仓库的 `.work/`，源码与未提交修改读本工作树：
+
+```sh
+cd /Users/litaotan/projects/Rungic-wt-m3-plan
+/Users/litaotan/projects/Rungic/.work/venv/bin/python tools/ci/husky_build_plan.py \
+  --release 20261004.1 \
+  --firefox-version '156.0.1~build1' \
+  --source-date-epoch "$(git show -s --format=%ct HEAD)" \
+  --input-root /Users/litaotan/projects/Rungic \
+  --output .work/husky/build-plan-20261004.1
+```
+
+该 epoch 是本次显式构建参数，复用时保持相同；若要保持第一次 bootstrap 的 epoch，以其 `bootstrap-report.json` 的 `source_date_epoch` 为准替换。合入主仓库后在主仓库执行同一命令时，去掉 `--input-root` 即可。输出目录必须不存在；重试用新的 `--output` 名，计划目录位置不参与组件输入键，同输入可复用已验证的内容寻址记录。volume 中的关联树须保留；缺失或内容/属主变化会拒绝发布计划，即使 Mac 文件缓存尚在。
+
+完成后工具打印四个实际记录目录中的产物路径。`standalone.py pack` 使用打印出的 **新产物及同目录报告/包锁**，传 `--build-plan .work/husky/build-plan-20261004.1/build-plan.json`；`--deps` 中的 `rungic-sparse-write` 必须来自新 sparse 记录，Termux 输入、spec、kernel report 和 package release 仍按 3.8 的既有核验准备。不要把今天旧成品路径与新计划混用。pack/verify 与 M4 实机验收仍待 Claude 执行；本工具不代表已完成组包、安装或桌面验收。
+
 ## 记录
+
+- 2026-10-04：Codex 在 `task/m3-build-plan` 完成 **3.8 构建计划准备与离线验证**，全部保留未提交。已完整阅读 `build_artifact.py`、两份 `build_fingerprinted_*`、docs/94、108 和相关脚本，使用项目三段式 skill 的构建隔离约定；先写测试，缺模块时确认失败，再实现实际 Mac 配方、执行器调用与四项绑定。扩展测试实际调用 `build_artifact.inputs/execute/verify` 和 `standalone.collect_build_manifest`，用生成配方配合假二进制/工具记录核验计划形状、root→host 依赖、输入变更拒绝、位置无关缓存键和新产物位于内容寻址目录；Docker/SDK 操作使用替身。进一步发现本机 Python 不提供 `os.listxattr/getxattr`，原执行器在 Mac 上无法哈希文件，已用 Darwin libc 的 no-follow 接口补齐，真实 xattr 改动使指纹变化，悬空链接仍可读取。实际宿主 C 编译测试又发现隔离环境丢掉 TMPDIR 后 clang 在沙箱 `/tmp` 创建临时文件失败，现将临时目录放在 pending 记录内部；宿主 C 编译与第二次复用通过。这两处修正保持 Linux xattr 路径及原输入/产物验证规则。新文件认领在 `install.rungicos-image`，新增 E7 与测试 covers，更新 `delivery.build-fingerprint/E2` 并重生成总览。指定主仓库 venv 的新测试、`tools/ci/test_build_manifest.py`、`tools/tests/test_build_artifact.py`、`tools/test_feature_inventory.py`、`tools/tests/test_dev_guide.py` 为 **50 passed、15 subtests passed**；`tools/pq.py lint`、`sh -n tools/build_enter.sh`、`git diff --check` 通过。现场为 `LitaodeMac-Studio.local` / arm64，系统代理为空，路由查询被沙箱拒绝。按本轮限制未访问 Docker/adb、未生成真正的 husky payload、未 git commit；容器重放/新产物、pack/verify 和 M4 均仍待验收。Claude 的精确运行命令和输入/缓存保留要求见上节。
 
 - 2026-10-04：**3.2 完成。** 本机 Docker 编出全部 19 个 rebuilt 包（含 Mesa），每个 40–165 秒，KWin 165 秒，全部成功并收进 `.work/apt/repo`；19 个项目包全部构建，版本 `0.727`/`0.728`。踩到的问题：(1) `build_mesa.py`、`pq source` 需要本机先有 `rungic-pq:26.04` 镜像（`docker build -t rungic-pq:26.04 -f tools/pq/Dockerfile tools/pq`）；(2) host 类项目包在本机执行 `build.sh`，依赖 GNU `install -D` 和 `dpkg-deb`，macOS 需 `brew install coreutils gnu-sed findutils gnu-tar dpkg`，并把这些 gnubin 目录放到 PATH 最前；(3) 2.3 打开 `-Dllvm` 后 `rungic-flatpak-gl` 在 Freedesktop SDK 镜像里找不到 llvm-config，已在其 `build.sh` 中单独覆盖为 `-Dllvm=disabled` 并补测试（`dc9a361`）。`rungic_release.py build` 默认会到原作者的手机读取 coupled 包版本；改用 `--coupled-json`，取编译镜像中 Ubuntu 当前版本（`plasma-workspace 4:6.6.6-0ubuntu0.1`、`libplasma7`/`libplasmaquick7 6.6.6-0ubuntu0.1`；rebuilt 包对它们只有 `>=` 约束），生成发布 `20261004.1`（72 个精确依赖）。Firefox `156.0.1~build1` arm64（`docs/40` 验证过的版本）来自 Mozilla 官方 APT：用仓库中的公钥（指纹 `35BAA0B3…`）验证 `InRelease` 签名（GOODSIG/VALIDSIG），再核对 `Packages` 和 deb 的 SHA-256（`c5cc4755…`），之后 `rungic_release.py import` 进包池。
 - 2026-10-04：**2.3 实机构建验收通过。** 本机 Docker（`--host local-docker`）编出 Mesa 1,669 个目标并打包。首次安装失败：`mesa-libgallium` 带了 `gbm/dri_gbm.so`，而 Ubuntu resolute 当前的 `libgbm1`（26.0.8-1ubuntu0.3）也拥有它，dpkg 拒绝覆盖。改为与 Ubuntu 一致放进 `libgbm1`（先写失败测试），升到 `+rungic5`。干净容器中 5 个包全部安装成功；`EGL_PLATFORM=surfaceless eglinfo -B` 显示渲染器 `llvmpipe (LLVM 21.1.8, 128 bits)`，OpenGL 4.6 Core；`kgsl_dri.so`、`zink_dri.so` 仍在。另：本机需先建 `rungic-pq:26.04`（`docker build -t rungic-pq:26.04 -f tools/pq/Dockerfile tools/pq`），`build_mesa.py` 不会自动构建它。
