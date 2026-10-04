@@ -224,7 +224,8 @@ def install(args):
     ''', root=True)
     stage = '/data/local/tmp/rungic-' + rid
     d.shell(f'mkdir -p {stage}')
-    for name in sorted(FILES | {'manifest.json'}):
+    # Every file the verified manifest lists (schema 2 adds build-manifest.json), as checked below.
+    for name in sorted(set(m['files']) | {'manifest.json'}):
         d.push(folder / name, stage + '/' + name)
     checks = '\n'.join(f"echo {shlex.quote(v['sha256'] + '  ' + stage + '/' + n)} | sha256sum -c -" for n, v in m['files'].items())
     d.shell(checks, root=True, timeout=300)

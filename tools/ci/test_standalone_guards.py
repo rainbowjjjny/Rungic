@@ -123,6 +123,42 @@ class ExistingRuntime(unittest.TestCase):
         self.assertFalse(self.install(), 'the same release name with another manifest is refused')
 
 
+class StagedInventory(unittest.TestCase):
+    # covers: install.standalone-install/E4
+    def test_every_manifest_file_reaches_the_phone_before_its_hash_check(self):
+        # A schema 2 payload also lists build-manifest.json. install() pushed only the fixed
+        # FILES set, so the on-phone sha256sum -c of every manifest file failed on husky.
+        files = sorted(standalone.FILES | {'build-manifest.json'})
+        manifest = {'schema': 2, 'release': 'test.2', 'rootfs_bytes': 1024, 'files': {n: {'bytes': 1, 'sha256': '0' * 64} for n in files}}
+        pushed = []
+
+        class Checked(Exception):
+            pass
+
+        class Device:
+            def __init__(self, args):
+                pass
+
+            def shell(self, script, root=False, timeout=120):
+                if 'sha256sum -c' in script:
+                    raise Checked(script)
+                return ''
+
+            def push(self, local, remote):
+                pushed.append(Path(remote).name)
+
+        args = argparse.Namespace(payload=Path('/payload'), manifest_sha256='0' * 64)
+        with mock.patch.object(standalone, 'Device', Device), \
+                mock.patch.object(standalone, 'verify', lambda folder, trusted: manifest), \
+                mock.patch.object(standalone, 'preflight', lambda d, m: {}):
+            with self.assertRaises(Checked) as checked:
+                standalone.install(args)
+        checked_names = set(re.findall(r'/([^/\s\']+)\'? \| sha256sum', checked.exception.args[0]))
+        self.assertEqual(checked_names, set(files))
+        self.assertLessEqual(checked_names, set(pushed))
+        self.assertIn('manifest.json', pushed)
+
+
 class FirstBootSpace(unittest.TestCase):
     """The first-boot script on a phone whose runtime is in place, up to writing the rootfs image."""
 
