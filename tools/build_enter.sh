@@ -1,6 +1,7 @@
 #!/bin/sh
 # Build a root "enter" program (tools/rungic_*_enter.c) as a static Android executable with the NDK:
 #   tools/build_enter.sh plasma|lxc    -> .work/build/android/rungic-NAME-enter
+# RUNGIC_ENTER_OUT redirects the newly compiled binary into a build record.
 # The program pivots into a Linux runtime before it execs, so its own C library does not matter;
 # RUNGIC_ANDROID_NDK overrides the newest NDK under $ANDROID_HOME.
 set -eu
@@ -23,7 +24,8 @@ fi
 [ -x "$task_clang" ] && [ -d "$task_sysroot" ] || {
     echo 'No Android clang/sysroot: set RUNGIC_ANDROID_CLANG and RUNGIC_ANDROID_SYSROOT' >&2; exit 1;
 }
-mkdir -p "$task_root/.work/build/android"
+task_out=${RUNGIC_ENTER_OUT:-$task_root/.work/build/android}
+mkdir -p "$task_out"
 "$task_clang" --target=aarch64-linux-android31 --sysroot="$task_sysroot" -static -s -O2 -Wall -Wextra -Werror \
-    "$task_root/tools/rungic_${name}_enter.c" -o "$task_root/.work/build/android/rungic-$name-enter"
-echo "$task_root/.work/build/android/rungic-$name-enter"
+    "$task_root/tools/rungic_${name}_enter.c" -o "$task_out/rungic-$name-enter"
+echo "$task_out/rungic-$name-enter"

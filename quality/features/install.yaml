@@ -722,6 +722,8 @@ features:
         text: 在 x86 主机上构建 ARM64 root 树时，chroot 不继承宿主的 Python 设置和 HOME，但保留代理。
       - id: E6
         text: 可以在原生 ARM64 Linux 容器中从 Ubuntu archive 和本地发布仓库生成全新 root 树；先核验输入和排除项，拒绝覆盖已有输出，记录完整包版本、架构及 deb 摘要，按锁重建时拒绝闭包或包内容变化。
+      - id: E7
+        text: 开发者在 ARM64 Mac 上用实际 NDK、native/APK 脚本与 Linux Docker 构建 rootfs 和宿主种子，得到四项产物的内容寻址记录及可被独立组包验证的 build plan；工具、源码、二进制输入与 Linux 属主身份纳入指纹，输入或输出变化时拒绝旧记录。
     pitfalls:
       - text: PRoot 下 systemd 安装脚本的原子改名报 EXDEV；改用独立 user/mount namespace 的真实 chroot 加 QEMU。
         docs: [docs/80-g100-image-installation-retrospective.md]
@@ -750,6 +752,8 @@ features:
       - tools/ci/build_host_seed.py
       - tools/ci/test_rootfs_isolation.py
       - tools/ci/test_build_manifest.py
+      - tools/ci/husky_build_plan.py
+      - tools/ci/test_husky_build_plan.py
       - system/ubuntu-packages.txt
       - system/ubuntu-excluded-packages.txt
       - system/ubuntu-build-packages.txt

@@ -5,7 +5,9 @@ Records describe local build consistency, not signed supply-chain attestations.
 The caller supplies the expected recipe; a cached record never chooses its own inputs.
 """
 import argparse
+import ctypes
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -14,6 +16,7 @@ import re
 import stat
 import subprocess
 import tempfile
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,6 +35,49 @@ def file_hash(path):
         for data in iter(lambda: stream.read(8 * 1024 * 1024), b''):
             h.update(data)
     return h.hexdigest()
+
+
+@functools.lru_cache(maxsize=1)
+def darwin_xattr_api():
+    """CPython exposes the Linux xattr API, but not the Darwin API."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+    libc.listxattr.restype = ctypes.c_ssize_t
+    libc.getxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p,
+                             ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+    libc.getxattr.restype = ctypes.c_ssize_t
+    return libc
+
+
+def xattrs(path):
+    if hasattr(os, 'listxattr'):
+        return {key: os.getxattr(path, key, follow_symlinks=False).hex()
+                for key in sorted(os.listxattr(path, follow_symlinks=False))}
+    if sys.platform != 'darwin':
+        raise ValueError('build input xattr hashing is unsupported on this platform')
+    api = darwin_xattr_api()
+    encoded = os.fsencode(path)
+    # XATTR_NOFOLLOW=1: hash the link itself, as on Linux.
+    def read(function, *prefix):
+        def call(buffer, size):
+            if function == api.listxattr:
+                return function(*prefix, buffer, size, 1)
+            return function(*prefix, buffer, size, 0, 1)
+        size = call(None, 0)
+        if size < 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code), str(path))
+        buffer = ctypes.create_string_buffer(size)
+        count = call(buffer, size)
+        if count < 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code), str(path))
+        if count > size:
+            raise ValueError(f'xattrs changed while hashing: {path}')
+        return buffer.raw[:count]
+    names = read(api.listxattr, encoded).split(b'\0')
+    return {os.fsdecode(name): read(api.getxattr, encoded, name).hex()
+            for name in sorted(names) if name}
 
 
 def content(path, ownership=False):
@@ -53,8 +99,7 @@ def content(path, ownership=False):
         row.update(kind='tree', entries={p.name: content(p, ownership) for p in sorted(path.iterdir())})
     else:
         raise ValueError(f'unsupported build input type: {path}')
-    attrs = {key: os.getxattr(path, key, follow_symlinks=False).hex()
-             for key in sorted(os.listxattr(path, follow_symlinks=False))}
+    attrs = xattrs(path)
     if attrs:
         row['xattrs'] = attrs
     return row
@@ -147,6 +192,8 @@ def execute(recipe, cache, root=ROOT):
             return {'reused': True, 'directory': str(target), 'report': report}
         stage = Path(tempfile.mkdtemp(prefix=key + '.pending-', dir=parent))
         try:
+            temporary = stage / '.tmp'
+            temporary.mkdir()
             replacements = {'{output}': str(stage), '{repo}': str(root)}
             replacements.update({'{input:' + name + '}': str(Path(dep['path']).resolve())
                                  for name, dep in recipe.get('dependencies', {}).items()})
@@ -156,6 +203,7 @@ def execute(recipe, cache, root=ROOT):
                 return text
             environment = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
                            'HOME': os.environ['HOME'], 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
+                           'TMPDIR': str(temporary.resolve()),
                            'PYTHONPYCACHEPREFIX': str(root / '.work/cache/python')}
             environment.update({key: expand(value) for key, value in recipe.get('environment', {}).items()})
             with (stage / 'build.log').open('wb') as log:
