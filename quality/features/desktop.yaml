@@ -655,6 +655,10 @@ features:
         text: 非法倍率（例如 6 倍、NaN、0）被拒绝，不写入配置；宿主拒绝或超时时恢复旧模式和刷新策略并返回失败。
         evidence:
           - {doc: docs/85-phone-display-size-policy.md, date: 2026-09-28, note: "非法 6 倍请求未写入"}
+      - id: E7
+        text: 未保存渲染分辨率时，无 KGSL 的手机（如 husky）默认短边 720（小屏不放大），减轻 CPU 渲染负担；有 KGSL 的 Qualcomm/Adreno 手机保留原生短边，已有用户设置仍优先。
+      - id: E8
+        text: 手机物理尺寸由真实显示模式的自然方向像素与 DisplayMetrics xdpi/ydpi 换算，宿主输出按 90°/270° 旋转交换毫米宽高，不随 720 渲染缓冲缩小；无效指标报告未知尺寸（0 mm），不套用别的手机尺寸。
     pitfalls:
       - text: 安卓 density 是逻辑 dp 倍率，不是面板 PPI；480/160=3 不能保证 Plasma 控件与安卓控件等大。默认的 1.25 系数是待跨设备校准的产品参数。
         docs: [docs/85-phone-display-size-policy.md, docs/50-plasma-display-settings.md]
@@ -670,7 +674,10 @@ features:
       - packages/kwin/debian/patches/rungic/handset-display-size.patch
       - system/config/etc/xdg/rungic-display-policyrc
       - tools/test_display_policy.py
-    docs: [docs/85-phone-display-size-policy.md]
+      - android/app/src/com/rungic/plasma/DisplayGeometry.java
+      - android/app/tests/DisplayGeometryTest.java
+      - android/app/src/com/rungic/plasma/MainActivity.java
+    docs: [docs/85-phone-display-size-policy.md, docs/108-husky-port.md]
 
   - id: desktop.brightness
     title: 桌面里调亮度

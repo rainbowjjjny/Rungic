@@ -664,6 +664,8 @@ features:
         text: 保留原厂模块的签名信任证书，不因缺模块而不开机。
         evidence:
           - {doc: docs/17-lxc-installation.md, date: 2026-09-22, note: "G100 S 恢复证书后 441 个模块完整加载"}
+      - id: E4
+        text: 独立组包的内核报告从最终 v4 boot 镜像自动提取真实 Linux 版本串、整文件 SHA-256 与字节数；支持 gzip、LZ4 legacy 和未压缩 Image，输入损坏、版本串缺失或可选构建 Image 不匹配时拒绝生成报告。
     pitfalls:
       - text: 直接开启 IPC、namespace 和额外 cgroup 配置曾造成 9,768 个 CRC 不匹配；要锁定与原厂匹配的 ACK 提交、构建号、页大小和证书，用 KABI 预留槽承载新字段。
         docs: [docs/80-g100-image-installation-retrospective.md]
@@ -683,6 +685,8 @@ features:
       - tools/ci/module_abi.py
       - tools/ci/test_module_abi.py
       - tools/ci/restore_module_trust.py
+      - tools/ci/kernel_report.py
+      - tools/ci/test_kernel_report.py
     docs:
       - docs/75-image-build-separation.md
       - docs/80-g100-image-installation-retrospective.md

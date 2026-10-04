@@ -184,6 +184,10 @@ Codex 负责 2.1–2.4 的代码与测试；Claude 审查、合并并在 M4 实�
 - `MainActivity.java:690`：物理尺寸改用 `DisplayMetrics.xdpi/ydpi` 计算，不再写死 151×68 mm。
 - 测试：沿用 `android/app/tests` 的 Java 单测模式，覆盖两种默认值。
 
+实现选择与调研（2026-10-04）：`MainActivity` 读取 `/dev/kgsl-3d0` 是否存在，将布尔能力交给纯 Java `DisplayGeometry`；节点与现有 Linux KGSL 路径一致，不按型号/品牌猜测，也不把 `startGpuAllocator` 成功当作有 KGSL（AHardwareBuffer 服务也能在 Mali 启动）。无 KGSL 默认 `min(720, 原生短边)`，有 KGSL 保留原生值，`render_short_edge` 已保存偏好仍优先。此处只判断节点存在，不探测实际 GPU 渲染是否成功；应用 SELinux 上下文能否看到节点、husky CPU 渲染体验仍由 M4 实机核验。
+
+物理尺寸复用 Android 的公开指标而非引入机型表：先用当前 `Display.Mode` 自然方向像素和 `DisplayMetrics.xdpi/ydpi` 计算毫米值，宿主输出再按 `Display.getRotation()` 的 90°/270° 交换轴；显示信息中的毫米值与其自然方向 `physicalWidth/physicalHeight` 保持一致。核对了 AOSP `android16-release` 的 [DisplayContent.computeScreenConfiguration](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android16-release/services/core/java/com/android/server/wm/DisplayContent.java)、[DisplayInfo.getMetricsWithSize](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android16-release/core/java/android/view/DisplayInfo.java)（Apache-2.0）：旋转只交换像素宽高，物理 DPI 仍为自然轴，不能直接拿旋转后的 metrics 像素与未交换的 DPI 相除。无效 DPI 返回 Wayland 未知尺寸 0 mm；真实毫米值的准确性仍取决于 OEM 提供的 DPI，离线测试不证明面板测量精度。
+
 ### 任务 2.5：验收项按设备能力分级
 - `release/acceptance.json` 中的 `contract.gpu-device`、`recording.quicksetting`、`perf.compositor`、`contract.wifi-display` 依赖 KGSL 或高通 WFD。在没有 KGSL 的设备上标为“不适用”并说明原因，不能删掉检查，也不能把它们当成通过。
 
@@ -206,6 +210,15 @@ Codex 负责 2.1–2.4 的代码与测试；Claude 审查、合并并在 M4 实�
 
 M3 的每个任务开始前，先把它展开成带验收命令的步骤，写进本文件。
 
+### 任务 3.7：从 boot 生成内核报告
+
+- 先写 `tools/ci/test_kernel_report.py` 的合成 v4 boot 测试并运行，确认失败；覆盖 gzip、LZ4 legacy、未压缩 Image、全文件摘要、错误头/截断/缺版本串及可选 Image 不匹配。
+- 实现 `tools/ci/kernel_report.py BOOT --output REPORT [--image Image]`；只从 header 声明的 kernel 区域解压提取 `Linux version`，不信 cmdline、ramdisk 或 AVB 尾部的字符串。复用 Python gzip 与上游 `lz4` CLI（LZ4 legacy 输入需安装 lz4），避免自行维护解码器。可选 Image 必须逐字节等于 boot 解压内容，不作为替代来源。
+- 验收：指定 venv 执行 `python -m pytest -q tools/ci/test_kernel_report.py tools/ci/test_standalone.py tools/test_run_tests.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py`、`python tools/pq.py lint`；Java 尺寸测试按 `tools/run-tests.sh` 的 javac/java 入口运行，并执行 `sh -n tools/run-tests.sh`。
+- 真实输入只读核验：`python tools/ci/kernel_report.py /Users/litaotan/projects/Rungic/.work/husky/boot-lxc.img --output .work/husky/kernel-report.json`。报告放本工作树 `.work/`，供后续 3.8 组包使用；生成报告不代表 ABI、签名、实机首装或 Plasma 验收通过。
+
+格式核验来源：[AOSP boot_img_hdr_v4](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/include/bootimg/bootimg.h)（BSD-3-Clause，源码 blob `67ae349583e66424e5af0a3b7a386b42b6c958e0`；1584 字节头、4096 字节页、kernel/ramdisk/signature 对齐布局）与 [LZ4 v1.10.0 legacy 格式](https://github.com/lz4/lz4/blob/v1.10.0/doc/lz4_Frame_format.md#legacy-frame)。本机 `lz4 --version` 为 1.10.0；直接调用上游 CLI（[GPL-2.0-or-later](https://github.com/lz4/lz4/blob/v1.10.0/programs/COPYING)）解码而不复制库源码，省去维护 LZ4 匹配/块边界解码器的成本。报告只提供 `standalone.py` 实际读取的三个必需字段及 schema/压缩方式/解压 Image 摘要，不伪造 ABI 或模块信任结果。只支持 v4；其他 boot 版本及未支持的压缩格式显式拒绝。
+
 ## M4：实机安装与验收
 
 - `standalone.py install` 到 husky（不清数据）；之后按 SKILL 的验收顺序逐项核对：base ready → payload verified → install/mount → release ready → account-prepare → account form → desktop loading → Plasma。
@@ -214,6 +227,7 @@ M3 的每个任务开始前，先把它展开成带验收命令的步骤，写�
 
 ## 记录
 
+- 2026-10-04：Codex 在 `task/m2-app-kernelreport` 完成 Task 2.4 与 3.7 的代码及离线验证，全部保持未提交。先写失败测试（Java 缺 helper、Python 缺报告模块、统一入口漏跑新 Java 测试均确认失败），再实现：无 KGSL 默认短边 720、有 KGSL 保留原生值，保存偏好优先；物理尺寸用真实显示模式像素与 xdpi/ydpi 换算，按显示旋转交换宿主毫米轴，未知 DPI 为 0 mm；新增 v4 boot 报告工具，支持 gzip/LZ4 legacy/raw Image，可选 `--image` 必须与解压内核逐字节一致。新文件已在功能清单认领并更新生成总览。指定主仓库 venv 的相关 pytest 加 `tools/test_feature_inventory.py`、`tools/tests/test_dev_guide.py` 为 **50 passed、31 subtests passed**；`pq.py lint`、`sh -n tools/run-tests.sh`、`git diff --check` 均退出 0；DisplayGeometry、FirstBootState、ControlException 三项 Java 测试通过，应用全部 Java 源码连同生成资源用 Android API 36 编译通过（仅现有 Java 8/deprecated API 警告）。只读解析主仓库 `.work/husky/boot-lxc.img`，报告保存在本工作树 `.work/husky/kernel-report.json`：`kernel_release=6.1.145-android14-11`、LZ4 legacy、`boot_bytes=67108864`、`boot_sha256=54053ca108d72d76cb627debef749e360c7e567ef70feebdf255cc5e731d2b3f`，解压 Image 为 35,699,200 字节、SHA-256 `70aa523bc4b54e4a84850c2bf0294d7a71cbb227320564c273331a707c089330`，与既有 boot 候选记录一致。本轮未访问手机，KGSL 节点在应用上下文的可见性、OEM DPI 与实际面板尺寸及 Plasma 实机体验仍待 M4；未执行完整 Linux 系统测试或 3.8 pack/verify，不以离线结果代替这些验收。
 - 2026-10-04：**1.5 完成，M1 完成。** 经用户同意：先 `fastboot boot` 原厂 `boot.img` 作对照组，约 26 秒开机，su 可用，319 个模块与基线名单相同，证明本机支持临时启动。再临时启动候选 `boot-lxc.img`，约 28 秒开机：`uname -r` 为 `6.1.145-android14-11`；Enforcing；六项配置 `=y`；`/proc/sysvipc` 有 msg/sem/shm；mqueue 与 devtmpfs（311 个节点）可挂载；busybox `unshare -r -p -i -m -f --mount-proc` 内 PID 为 1、uid_map 为 `0 0 1`、IPC 可用；319 个模块名单与基线完全相同；dmesg 无模块符号或签名错误（匹配到的 4 行 `panic` 字样都是正常配置日志）；Wi-Fi 已连接，屏幕开启，触摸设备 `fts` 在；用户手动确认触屏、显示、网络正常。用户再次同意后 `fastboot flash boot_b`，重启后复查同样全部通过；从 `/dev/block/by-name/boot_b` 读回的 SHA-256 为 `54053ca1…`，与候选镜像一致。回退：`fastboot flash boot_b .work/husky/stock/boot.img`。
 - 2026-10-04：**1.4 完成。** 原厂 Image 中只有一张 1,357 字节、subject 为 `CN = Build time autogenerated kernel key` 的证书（SHA-256 `91f55959…`），候选 Image 中同样只有一张等长、同 subject 的证书。用原厂证书对 `system_dlkm` 59 个模块做 CMS 验签全部通过；反向对照：用候选证书验签前 10 个全部失败，证明必须换证书。`restore_module_trust.py` 只改了证书范围内的 1,095 字节，范围外字节不变（`.work/husky/trust-report.json`）。重打包：kernel 用 `lz4 -l -12 --favor-decSpeed`，`mkbootimg --header_version 4`、无 ramdisk、cmdline 为空；原厂 boot 签名区大小为 0，无需处理。AVB 采用与本机已能启动的 Magisk init_boot 相同的做法：保留原厂 vbmeta 签名块（公钥 `69da4e73…`、rollback index 1775347200），只按新长度重写 footer；签名校验必然失败，依赖已解锁（orange）放行。`unpack_bootimg` 比对：与原厂相比只有 `kernel_size` 不同；boot 中的 kernel 解压后与 `Image.trusted` 逐字节一致。候选 `boot-lxc.img` SHA-256 `54053ca108d72d76cb627debef749e360c7e567ef70feebdf255cc5e731d2b3f`。已知差异：版本串为 `6.1.145-android14-11`，没有 `-gfa1d6308d1fe-ab14691759` 后缀（`--config=stamp` 没有生效）。模块装载在 MODVERSIONS 下不比较版本号部分的 vermagic，但仍需在 1.5 中实测确认。
 - 2026-10-04：1.5 检查脚本 `.work/husky/check-kernel.sh` 在原厂内核上先跑一遍作反向对照：六项配置均无；`/proc/sysvipc` 不存在；mqueue、devtmpfs 挂载报 `No such device`；`unshare -r -p -i -m` 报 `Invalid argument`；319 个模块，dmesg 无模块错误。
