@@ -1,0 +1,71 @@
+Description: Use public NDK log and property APIs in Mesa utilities
+Author: Rungic <noreply@rungic.invalid>
+Origin: Rungic
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Pending; NDK headers instead of private AOSP headers
+X-Rungic-Tests: L0:tools/tests/test_virgl_server.py; L1:NDK-cross-build
+X-Rungic-Docs: docs/108-husky-port.md
+License: MIT
+ .
+ Keep Android OS detection intact. The NDK does not ship liblog/log.h or
+ cutils/properties.h. Android liblog and bionic expose equivalent public APIs.
+ This replaces Termux's blanket disabling of Android detection (0009).
+---
+--- a/src/mesa/util/os_misc.c
++++ b/src/mesa/util/os_misc.c
+@@ -55,8 +55,8 @@
+ #if DETECT_OS_ANDROID
+ #  define LOG_TAG "MESA"
+ #  include <unistd.h>
+-#  include <log/log.h>
+-#  include <cutils/properties.h>
++#  include <android/log.h>
++#  include <sys/system_properties.h>
+ #elif DETECT_OS_LINUX || DETECT_OS_CYGWIN || DETECT_OS_SOLARIS || DETECT_OS_HURD
+ #  include <unistd.h>
+ #elif DETECT_OS_OPENBSD || DETECT_OS_FREEBSD
+@@ -117,7 +117,7 @@
+    fputs(message, fout);
+    fflush(fout);
+ #  if DETECT_OS_ANDROID
+-   LOG_PRI(ANDROID_LOG_ERROR, LOG_TAG, "%s", message);
++   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "%s", message);
+ #  endif
+ #endif
+ }
+@@ -172,9 +172,9 @@
+       return entry->data;
+    }
+ 
+-   char value[PROPERTY_VALUE_MAX];
+-   char key[PROPERTY_KEY_MAX];
+-   char *p = key, *end = key + PROPERTY_KEY_MAX;
++   char value[PROP_VALUE_MAX];
++   char key[PROP_NAME_MAX];
++   char *p = key, *end = key + PROP_NAME_MAX;
+    /* add "mesa." prefix if necessary: */
+    if (strstr(name, "MESA_") != name)
+       p += strlcpy(p, "mesa.", end - p);
+@@ -188,7 +188,7 @@
+    }
+ 
+    const char *opt = NULL;
+-   int len = property_get(key, value, NULL);
++   int len = __system_property_get(key, value);
+    if (len > 1) {
+       opt = ralloc_strdup(options_tbl, value);
+    }
+--- a/src/mesa/meson.build
++++ b/src/mesa/meson.build
+@@ -23,6 +23,10 @@
+   thread_dep,
+ ]
+ 
++if with_host_android
++  deps_mesa += cc.find_library('log', required: true)
++endif
++
+ libmesa = static_library(
+   'mesa',
+   files_mesa,

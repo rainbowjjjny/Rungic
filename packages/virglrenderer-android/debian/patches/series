@@ -1,0 +1,7 @@
+rungic/0001-android-egl-without-gbm.patch
+rungic/0002-clang-offset-warning.patch
+rungic/0003-disable-dual-src-blend.patch
+rungic/0004-arm-callback-abi.patch
+rungic/0005-android-memfd-gles-default.patch
+rungic/0006-follow-supervisor-lifetime.patch
+rungic/0007-public-ndk-log-properties.patch

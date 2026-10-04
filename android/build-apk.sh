@@ -17,6 +17,9 @@ mkdir -p "$task_build/classes" "$task_build/dex"
 task_ocr=$task_build/ocr
 rm -rf "$task_ocr" "$task_build/assets"
 cp -r "$task_root/android/app/assets" "$task_build/assets"
+[ -s "$task_native/lib/arm64-v8a/libvirgl_test_server.so" ] || { echo 'Missing vtest server: run android/build-native-core.sh' >&2; exit 1; }
+[ -d "$task_native/licenses/virgl" ] || { echo 'Missing virgl license notices: run android/build-virgl-server.sh' >&2; exit 1; }
+cp -r "$task_native/licenses/virgl" "$task_build/assets/virgl"
 # On-device OCR (docs/64, docs/73), RUNGIC_APK_OCR:
 #   runtime (default)  LiteRT and librungicocr.so in the APK; the APK downloads the PP-OCRv6 models
 #                      (~77 MB, pinned in provenance/ocr-20260925) on first use
@@ -47,9 +50,11 @@ cd "$task_root/android/app"
 rm -rf "$task_build/gen"; mkdir -p "$task_build/gen"
 "$task_bt/aapt2" link -o "$task_build/resources.apk" -I "$task_jar" --manifest AndroidManifest.xml -A "$task_build/assets" -0 tflite \
     --java "$task_build/gen" "$task_build/resources.zip"
-mapfile -t task_sources < <(find src "$task_build/gen" -name '*.java')
+find src "$task_build/gen" -name '*.java' > "$task_build/java-sources.list"
+mapfile -t task_sources < "$task_build/java-sources.list"
 javac -encoding UTF-8 -source 8 -target 8 -classpath "$task_jar" -d "$task_build/classes" "${task_sources[@]}"
-mapfile -t task_classes < <(find "$task_build/classes" -name '*.class')
+find "$task_build/classes" -name '*.class' > "$task_build/java-classes.list"
+mapfile -t task_classes < "$task_build/java-classes.list"
 "$task_bt/d8" --lib "$task_jar" --min-api 30 --output "$task_build/dex" "${task_classes[@]}"
 cp "$task_build/resources.apk" "$task_build/unsigned.apk"
 (cd "$task_build/dex" && zip -q "$task_build/unsigned.apk" classes.dex)

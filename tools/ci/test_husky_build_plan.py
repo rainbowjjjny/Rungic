@@ -241,3 +241,11 @@ def test_enter_override_builds_in_record_not_shared_workspace(tmp_path):
                                 capture_output=True, text=True)
         assert Path(result.stdout.strip()).parent == output
         assert Path(result.stdout.strip()).read_text() == 'binary'
+
+
+# covers: apps.gpu/E7
+def test_apk_fingerprint_includes_virgl_server_sources(tmp_path):
+    """A cached APK must not hide a changed Mali server or source pin."""
+    apk = h.recipes(config(tmp_path))['husky-apk']
+    assert {'android/build-virgl-server.sh', 'packages/virglrenderer-android/',
+            'tools/prepare_virgl_server.py'} <= set(apk['sources'])

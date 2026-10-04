@@ -1,0 +1,49 @@
+Description: Use API 30 memfd and surfaceless GLES by default
+Author: Rungic <noreply@rungic.invalid>
+Origin: Rungic
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Inappropriate; Android app EGL integration
+X-Rungic-Tests: L0:tools/tests/test_virgl_server.py; L1:NDK-cross-build; L3:husky-app-domain (to write)
+X-Rungic-Docs: docs/108-husky-port.md
+License: MIT
+ .
+ Keep upstream socket-path and per-client fork options. Bionic memfd needs no ashmem fallback on minSdk 30. No ANGLE or Termux path detection.
+---
+--- a/vtest/vtest_shm.c
++++ b/vtest/vtest_shm.c
+@@ -31,8 +31,12 @@
+ #include <fcntl.h>
+ 
+ #include <sys/syscall.h>
++#ifdef __ANDROID__
++#include <sys/mman.h>
++#endif
+ #include <unistd.h>
+ 
++#ifndef __ANDROID__
+ static int memfd_create(const char *name, unsigned int flags)
+ {
+ #ifdef __NR_memfd_create
+@@ -43,6 +47,8 @@
+     return -1;
+ #endif
+ }
++
++#endif /* Android API 30 provides memfd_create in bionic. */
+ 
+ int vtest_new_shm(uint32_t handle, size_t size)
+ {
+--- a/vtest/vtest_server.c
++++ b/vtest/vtest_server.c
+@@ -310,8 +310,8 @@
+ static void vtest_server_getenv(void)
+ {
+    server.use_glx = getenv("VTEST_USE_GLX") != NULL;
+-   server.use_egl_surfaceless = getenv("VTEST_USE_EGL_SURFACELESS") != NULL;
+-   server.use_gles = getenv("VTEST_USE_GLES") != NULL;
++   server.use_egl_surfaceless = true;
++   server.use_gles = true;
+    server.render_device = getenv("VTEST_RENDERNODE");
+    server.use_compat_profile = getenv("VTEST_USE_COMPATIBILITY_PROFILE");
+ }

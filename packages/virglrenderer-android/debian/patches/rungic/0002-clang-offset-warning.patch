@@ -1,0 +1,23 @@
+Description: Allow the existing GNU offsetof and pointer arithmetic with NDK Clang
+Author: Rungic <noreply@rungic.invalid>
+Origin: https://github.com/termux/termux-packages/blob/d5bd85588ca75ac530e68cf84ad211e5bb4f3d49/packages/virglrenderer-android/0002-avoid-gnu-offsetof-extensions-error.patch.beforehostbuild
+Forwarded: no
+Last-Update: 2026-10-05
+X-Rungic-Status: Inappropriate; Android app EGL integration
+X-Rungic-Tests: L0:tools/tests/test_virgl_server.py; L1:NDK-cross-build; L3:husky-app-domain (to write)
+X-Rungic-Docs: docs/108-husky-port.md
+License: MIT
+ .
+ Adapted from the MIT-licensed Termux package queue (LICENSE.md).
+---
+--- a/meson.build
++++ b/meson.build
+@@ -65,6 +65,8 @@
+    '-Werror=switch',
+    '-Wno-overlength-strings',
+    '-Wno-missing-field-initializers',
++   '-Wno-gnu-offsetof-extensions',
++   '-Wno-gnu-pointer-arith',
+    '-Werror=format',
+ ]
+ 

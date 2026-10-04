@@ -380,6 +380,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 runOnUiThread(() -> showLoading(getString(R.string.starting_desktop)));
                 KeyboardAssets.ensure(getApplicationContext());
                 new File(getFilesDir(), "tmp").mkdirs();
+                DesktopService.startRenderServer(getApplicationContext());
                 platform.start();
                 capture.start();
                 codecs.start();
@@ -812,7 +813,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             if (i == 4) capture.requestPermissionsFromUser();
             if (i == 5) new AlertDialog.Builder(this).setTitle(R.string.stop_title)
                 .setMessage(R.string.stop_message)
-                .setNegativeButton(R.string.action_cancel,null).setPositiveButton(R.string.stop_confirm,(dialog,which)->worker.execute(() -> { try { control("stop"); NativeBridge.releaseWaylandConnection(); initialized=false;
+                .setNegativeButton(R.string.action_cancel,null).setPositiveButton(R.string.stop_confirm,(dialog,which)->worker.execute(() -> { try { control("stop"); DesktopService.stopRenderServer(); NativeBridge.releaseWaylandConnection(); initialized=false;
                 runOnUiThread(() -> { stopService(new Intent(this, DesktopService.class)); finish(); });
             } catch(Exception e) { runOnUiThread(() -> Toast.makeText(this, R.string.stop_failed, Toast.LENGTH_LONG).show()); } })).show();
             if(i==6) {

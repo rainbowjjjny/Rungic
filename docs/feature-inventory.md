@@ -666,7 +666,7 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 - **E5** 同一 Mesa 配方包含 virgl（virpipe/vtest，经 Android 服务访问 husky Mali）、softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL）；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND，Flatpak GL 扩展保留自己的驱动与 LLVM 覆盖。（单元测试）
 
 注意：
-- virpipe 多个 Qt 渲染线程共用一个 vtest socket，必须按完整事务加锁；连接失败须在协议 I/O 前返回并让建屏失败。B1 只准备 Mesa 构建与补丁，不启用会话；显式 GALLIUM_DRIVER=virpipe 不自动回退 llvmpipe，服务启动、探测和会话恢复仍待集成。容器禁止挂载或打开 /dev/mali0（kbase PID 命名空间 panic），GPU 访问留在 Android init PID 命名空间。 [docs/108-husky-port.md](../docs/108-husky-port.md)
+- M5 B2 仅完成服务端构建与 App 看护；App 域下 EGL、memfd 跨域传递、Mali 画面与性能尚待实机核验，客户端 virpipe 探测/失效后的 plasmashell 回退属于 B3。running 只表示监听 socket 出现，Linux 仍须实际探测；App 被强杀后状态可能陈旧。容器不得挂载 /dev/mali0（kbase PID namespace panic）。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 - KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。 [docs/research/74-vaapi-feasibility.md](../docs/research/74-vaapi-feasibility.md) [docs/research/93-xwayland-kgsl-gpu.md](../docs/research/93-xwayland-kgsl-gpu.md)
 - 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md) [docs/108-husky-port.md](../docs/108-husky-port.md)
 - 2026-09-26 全局把 Qt Quick 改成 Vulkan 后语音助手整屏灰色闪帧，当天撤回；评估渲染后端必须做逐帧画面检测，不能只看帧间隔和 CPU。 [docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)

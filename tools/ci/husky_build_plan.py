@@ -159,6 +159,7 @@ def recipes(c):
          'shared/android/rungic-cast/'], ['host-seed.tar.gz', 'host-seed-report.json'],
         host_deps, {**docker, **ndk, **java}, native_env, host_steps)
     apk_env = dict(native_env, RUNGIC_PROXY='', RUNGIC_APK_OCR='none',
+        RUNGIC_VIRGL_PYTHON=sys.executable,
         RUNGIC_NATIVE_OUT='{output}/native/lib/arm64-v8a', RUNGIC_NATIVE_LIBS='{output}/native',
         RUNGIC_JNI_LIBS_DIR='{output}/native/lib/arm64-v8a', CARGO_TARGET_DIR='{output}/cargo',
         RUNGIC_XKBCOMMON_LIB='{input:xkb}', RUNGIC_APK_OUT='{output}/apk',
@@ -167,7 +168,8 @@ def recipes(c):
         RUNGIC_ANDROID_LINK_LIBS='{output}/native/lib/arm64-v8a',
         RUSTUP_TOOLCHAIN='stable-aarch64-apple-darwin')
     apk = base('husky-apk', ['android/app/', 'android/host/', 'android/build-native-core.sh',
-        'android/build-apk.sh', 'packages/android-host/', 'packages/smithay/', 'packages/winit/',
+        'android/build-apk.sh', 'android/build-virgl-server.sh', 'packages/virglrenderer-android/',
+        'tools/prepare_virgl_server.py', 'packages/android-host/', 'packages/smithay/', 'packages/winit/',
         'tools/prepare_android_host.py', 'tools/pq.py', 'tools/toolchains/',
         'signing/development/launcher-signing.p12'], ['rungic.apk'],
         {'xkb': {'path': c['xkb'], 'sha256': c['xkb_sha256'], 'origin': 'Ubuntu libxkbcommon 1.13.1 / NDK 28.2 Meson binary'},
@@ -393,7 +395,7 @@ def main():
         runtime=str(inputs / '.work/husky/alpine/alpine-lxc-runtime.tar.gz'),
         snapshot=str(output / 'pool.identity.json'), pq_image=pq_image,
         host_tools={name: str(Path(shutil.which(name)).resolve())
-                    for name in ('bash', 'sh', 'zip', 'sed', 'find', 'git')},
+                    for name in ('bash', 'sh', 'zip', 'sed', 'find', 'git', 'patch', 'meson', 'ninja', 'pkg-config')},
         )
     # rustup is wherever this machine installed it (~/.cargo/bin, Homebrew, ...).
     rustup = shutil.which('rustup')
