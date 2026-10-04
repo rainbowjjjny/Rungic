@@ -719,8 +719,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private static String control(String action, String payload) throws Exception {
-        ProcessBuilder b = new ProcessBuilder("/product/bin/su", "--mount-master", "-c", "/data/adb/rungic-plasma/rungic-plasma " + action);
-        b.environment().put("PATH", "/product/bin:/system/bin:/system/xbin:/vendor/bin");
+        ProcessBuilder b = new ProcessBuilder(RootShell.SU, "--mount-master", "-c", "/data/adb/rungic-plasma/rungic-plasma " + action);
+        b.environment().put("PATH", RootShell.path());
         b.environment().remove("LD_PRELOAD"); b.environment().remove("LD_LIBRARY_PATH");
         Process p = b.redirectErrorStream(true).start();
         try (OutputStream input=p.getOutputStream()) {

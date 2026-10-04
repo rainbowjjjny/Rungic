@@ -127,7 +127,7 @@ final class AndroidNetworkBridge implements Closeable {
         try {
             if(rootProcess==null || !rootProcess.isAlive()) {
                 closeRoot();
-                ProcessBuilder builder=new ProcessBuilder("/product/bin/su","--mount-master","-c","/system/bin/sh");
+                ProcessBuilder builder=new ProcessBuilder(RootShell.SU,"--mount-master","-c","/system/bin/sh");
                 builder.environment().remove("LD_PRELOAD");builder.environment().remove("LD_LIBRARY_PATH");
                 rootProcess=builder.redirectErrorStream(true).start();
                 rootInput=new BufferedWriter(new OutputStreamWriter(rootProcess.getOutputStream(),StandardCharsets.UTF_8));
