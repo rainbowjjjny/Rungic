@@ -79,3 +79,10 @@ spec 的 `stock.format=pixel-factory` 选择 Pixel 提取报告契约；未声�
 ## 网络代理
 
 - `deployment.phone_http_proxy` 暂为空字符串（不用代理）。X70 spec 和 AGENTS.md:85 里的 `http://192.168.5.45:6152` 是原作者 Mac mini 上的 Surge 代理（AGENTS.md:80、84），不是本机的网络，不能沿用。M3 打独立安装包前要和用户确认：手机所在网络是否需要代理才能访问 Ubuntu/apt 源，需要的话填用户自己的代理地址，并发新的 spec。
+
+## 原厂模块提取（2026-10-04 实测）
+
+- 原厂 `.ko` 共 **331** 个：`vendor_kernel_boot` ramdisk 210 个（LZ4 legacy 压缩的 cpio），`vendor_dlkm` 62 个，`system_dlkm` 59 个。两个 dlkm 都是 ext4（e2fsprogs 的 `debugfs -R "rdump / dir"` 可读）。
+- **`vendor_dlkm/lib/modules/16k-mode/` 下有 5 个同名模块**，是为 16K 页内核（内层包里的 `kernel_16k`，构建 14810637、commit `164ae0b804dd`）编的，不是本机 4K 内核用的。提取时必须排除 `16k-mode`，并保留目录结构，不能把所有 `.ko` 平铺到一个目录：平铺后 16K 版会覆盖同名 4K 版，`bcmdhd4398.ko` 和 `cs40l26-i2c.ko` 会显示出 66 个假的 CRC 不匹配。判断依据：手机上 `/vendor_dlkm/lib/modules/bcmdhd4398.ko` 的 SHA-256 为 `6e29e0170ebbd80b811264eeabcb84c6003f25ed4b704ec48911ef3080b95cae`，与排除 16K 后提取的文件一致，其 CRC 与原样构建一致。
+- 原厂 `boot.img` 的 kernel 是 LZ4 legacy 压缩（`lz4 -l`），解压后 `Image` 35,564,032 字节。重打包时保持同样压缩方式。
+- `vbmeta.img` 把 `boot`、`init_boot`、`vbmeta_vendor` 作为链式分区，公钥 SHA-1 都是 `69da4e73…`（`vbmeta_system` 为 `d0495212…`）。改过的 boot 校验必然失败；已解锁（orange）时允许，这也是 Magisk 修补后的 init_boot 能启动的原因。

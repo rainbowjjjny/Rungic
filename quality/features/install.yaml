@@ -676,6 +676,8 @@ features:
     code:
       - packages/gki-android15-6.6/
       - packages/gki-android16-6.12/
+      - packages/gki-android14-6.1/
+      - kernel/targets/gki/android14-6.1-manifest.xml
       - kernel/README.md
       - kernel/targets/
       - tools/ci/module_abi.py
