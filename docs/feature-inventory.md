@@ -2846,7 +2846,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - X70 的 6.12 收敛 C 布局后还剩 Rust Binder 的 CRC 差异，需要单独的补丁。 [docs/83-x70-air-pro-onboarding.md](../docs/83-x70-air-pro-onboarding.md)
 - 每台手机有自己的内核产物，boot 二进制不跨机型复用；Magisk 也要在目标设备本机修补。 [docs/75-image-build-separation.md](../docs/75-image-build-separation.md)
 
-文档：[docs/75-image-build-separation.md](../docs/75-image-build-separation.md)、[docs/80-g100-image-installation-retrospective.md](../docs/80-g100-image-installation-retrospective.md)、[docs/83-x70-air-pro-onboarding.md](../docs/83-x70-air-pro-onboarding.md)
+文档：[docs/75-image-build-separation.md](../docs/75-image-build-separation.md)、[docs/80-g100-image-installation-retrospective.md](../docs/80-g100-image-installation-retrospective.md)、[docs/83-x70-air-pro-onboarding.md](../docs/83-x70-air-pro-onboarding.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)
 
 #### 构建独立 RungicOS 镜像
 
