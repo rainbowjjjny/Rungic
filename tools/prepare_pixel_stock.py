@@ -14,10 +14,10 @@ verification.json schema version 1:
     All ten required partition images and android-info.txt have file entries.
   flashed, device_tested: false (host extraction is not device acceptance)
 
-The identity and files fields follow the Motorola manifest naming convention;
-a Pixel-aware preflight can compare archive/device/build against its spec and
-rehash each declared partition. The existing Motorola preflight needs a Pixel
-branch to consume this report: no super_sha256 or AVB key verification is claimed.
+The identity and files fields follow the Motorola manifest naming convention.
+tools/ci/preflight.py consumes this report when the spec's stock.format is
+pixel-factory, comparing archive/device/build and rehashing declared partitions.
+This extraction report claims no super_sha256 or AVB key verification.
 """
 
 import argparse

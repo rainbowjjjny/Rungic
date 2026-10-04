@@ -158,6 +158,7 @@ M2/M3 依赖 M1 的实测结果（例如 KWin 在 Mali 上能否用 QPainter/SHM
 
 ## 记录
 
+- 2026-10-04：Codex 在 `task/husky-spec` 完成 Task 0.3 的仓库改动，按本次要求保留未提交状态。新增 [husky spec](../profiles/devices/google/husky/CP1A.260405.005.json) 与 [知识档案](../profiles/devices/google/husky/CP1A.260405.005-knowledge.md)，身份、uname 与 319 个模块基线取自真实只读采集副本；十个分区摘要与 archive name/SHA 取自真实 Pixel 提取报告。先写失败测试，再实现按 `stock.format=pixel-factory` 选择的预检路径，保留旧 Motorola 路径；从主仓库只读原厂 `vbmeta.img` 用纯 Python 解析并计算 AVB 公钥 SHA-1 `69da4e73583acf8741905c590537f6b73d8c69df`，解析器有 offset/size、截断与越界测试。主仓库原厂文件的全部声明分区、字节数与公钥摘要通过离线核验；指定 venv 的 `python -m pytest -q tools/ci/test_device_preflight.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py` 为 31 passed、110 subtests passed，`python tools/pq.py lint` 退出 0。质量归属/文档分类与生成总览已更新。模块信任证书摘要保留 null，等待 Task 1.4；本轮没有访问手机或 VM，完整真机 preflight 仍待 Claude 验收，不标记本任务实机验收通过。
 - 2026-10-04：Codex 完成 Task 1.3 的 ABI 工具阻断项修复。离线验证：指定 venv 的 `python -m pytest -q tools/ci/test_module_abi.py` 为 18 passed、17 subtests passed，`python tools/pq.py lint` 退出 0。覆盖缺失导出、模块新增/删除/改名/摘要变化、相同基线、未解析引用减少、CRC 差异、不传 baseline 的兼容行为和可选内核产物摘要；空清单及损坏基线也拒绝。仅完成工具与合成输入验证，1.2 原厂等价报告、候选内核编译及原厂模块实测仍由后续任务验收。
 - 2026-10-04：Codex（gpt-6.1-sol / high）审查本计划，提出 11 条意见（1 个阻断：`module_abi.py` 漏判缺失导出）。核实后全部采纳：LTO 实测为 `LTO_NONE`，与 `--lto=none` 一致；其余修订见 M0/M1 各任务。
 - 2026-10-04：编译机 `repo init --standalone-manifest` 后同步 ACK 源码；内核 manifest 仓库没有 `android14-6.1-2025-09` 分支，只能用固定的 manifest 文件。

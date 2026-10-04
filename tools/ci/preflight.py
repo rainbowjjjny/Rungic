@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -23,6 +24,81 @@ def sha256(path):
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def avb_public_key_sha1(data):
+    """Hash the serialized key blob of a standalone AVB v1 vbmeta image.
+
+    Layout: AOSP libavb/avb_vbmeta_image.h (MIT), blob
+    f9cbac447d0941429d813ca0aadef4401e7ec8d7. All header integers are big endian;
+    the key offset is relative to the auxiliary block, after authentication.
+    This extracts a digest, not a cryptographic verification of the signature.
+    """
+    require(len(data) >= 256 and data[:4] == b"AVB0", "invalid AVB vbmeta header")
+    require(struct.unpack_from(">I", data, 4)[0] == 1, "unsupported AVB header version")
+    auth_size, aux_size = struct.unpack_from(">QQ", data, 12)
+    key_offset, key_size = struct.unpack_from(">QQ", data, 64)
+    require(auth_size % 64 == 0 and aux_size % 64 == 0, "invalid AVB block alignment")
+    aux_start = 256 + auth_size
+    require(aux_start + aux_size <= len(data), "truncated AVB blocks")
+    require(key_size > 0 and key_offset + key_size <= aux_size, "invalid AVB public key range")
+    start = aux_start + key_offset
+    return hashlib.sha1(data[start:start + key_size]).hexdigest()
+
+
+def verify_stock(spec, stock):
+    """Select the extraction contract from the spec; old specs keep the Motorola path.
+
+    pixel-factory consumes prepare_pixel_stock.py's verification.json directly.
+    Each <partition>_sha256 in stock pins both its report entry and local .img.
+    The build is the build ID in the independently captured fingerprint.
+    """
+    identity = spec["identity"]
+    pinned = spec["stock"]
+    stock_format = pinned.get("format", "motorola")
+    require(stock_format in ("motorola", "pixel-factory"), "unsupported stock format")
+    verification_path = stock / "verification.json"
+    verification = json.loads(verification_path.read_text())
+    evidence = {"stock_verification_sha256": sha256(verification_path)}
+    if stock_format == "pixel-factory":
+        require(verification.get("schema_version") == 1, "unsupported Pixel verification schema")
+        require(verification.get("archive_name") == pinned["archive_name"], "OEM archive name mismatch")
+        require(verification.get("archive_sha256") == pinned["archive_sha256"], "OEM archive mismatch")
+        require(verification.get("device") == identity["device"], "OEM device mismatch")
+        build = re.fullmatch(r"[^/]+/[^/]+/[^:]+:[^/]+/([^/]+)/[^/]+:[^/]+/[^/]+", identity["fingerprint"])
+        require(build is not None, "invalid device spec fingerprint")
+        require(verification.get("build") == build[1], "OEM build mismatch")
+        require(verification.get("flashed") is False and verification.get("device_tested") is False,
+                "stock verification report has unexpected device state")
+        partitions = {name.removesuffix("_sha256"): digest for name, digest in pinned.items()
+                      if name.endswith("_sha256") and name != "archive_sha256"}
+        require("boot" in partitions and "vbmeta" in partitions, "stock spec lacks boot or vbmeta hash")
+        for partition, digest in partitions.items():
+            require(re.fullmatch(r"[a-z][a-z0-9_]*", partition) is not None, "invalid stock partition name")
+            name = f"{partition}.img"
+            entry = verification.get("files", {}).get(name, {})
+            require(entry.get("sha256") == digest, f"OEM {partition} verification mismatch")
+            path = stock / name
+            require(path.stat().st_size == entry.get("bytes"), f"OEM {partition} size mismatch")
+            require(sha256(path) == digest, f"OEM {partition} changed")
+        if pinned.get("avb_public_key_sha1") is not None:
+            require(avb_public_key_sha1((stock / "vbmeta.img").read_bytes()) == pinned["avb_public_key_sha1"],
+                    "OEM AVB key mismatch")
+    else:
+        manifest_path = stock / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        require(verification["stock_manifest_sha256"] == sha256(manifest_path), "stock manifest changed")
+        require(manifest["archive_sha256"] == pinned["archive_sha256"], "OEM archive mismatch")
+        require(manifest["fingerprint"] == identity["fingerprint"], "OEM fingerprint mismatch")
+        require(manifest["device"] == identity["device"], "OEM device mismatch")
+        require(manifest["files"]["boot.img"]["sha256"] == pinned["boot_sha256"], "OEM boot manifest mismatch")
+        require(sha256(stock / "boot.img") == pinned["boot_sha256"], "OEM boot changed")
+        require(verification["super_sha256"] == pinned["super_sha256"], "OEM super verification mismatch")
+        require(verification["avb_public_key_sha1"] == pinned["avb_public_key_sha1"], "OEM AVB key mismatch")
+        require(not verification["flashed"] and not verification["device_tested"],
+                "stock verification report has unexpected device state")
+        evidence["stock_manifest_sha256"] = sha256(manifest_path)
+    return evidence
 
 
 def adb(port, serial, *args):
@@ -43,23 +119,7 @@ def main():
     require(spec.get("schema_version") == 1, "unsupported device spec schema")
     identity = spec["identity"]
     stock = args.stock.resolve(strict=True)
-    manifest_path = stock / "manifest.json"
-    verification_path = stock / "verification.json"
-    manifest = json.loads(manifest_path.read_text())
-    verification = json.loads(verification_path.read_text())
-    require(verification["stock_manifest_sha256"] == sha256(manifest_path), "stock manifest changed")
-    require(manifest["archive_sha256"] == spec["stock"]["archive_sha256"], "OEM archive mismatch")
-    require(manifest["fingerprint"] == identity["fingerprint"], "OEM fingerprint mismatch")
-    require(manifest["device"] == identity["device"], "OEM device mismatch")
-    require(manifest["files"]["boot.img"]["sha256"] == spec["stock"]["boot_sha256"],
-            "OEM boot manifest mismatch")
-    require(sha256(stock / "boot.img") == spec["stock"]["boot_sha256"], "OEM boot changed")
-    require(verification["super_sha256"] == spec["stock"]["super_sha256"],
-            "OEM super verification mismatch")
-    require(verification["avb_public_key_sha1"] == spec["stock"]["avb_public_key_sha1"],
-            "OEM AVB key mismatch")
-    require(not verification["flashed"] and not verification["device_tested"],
-            "stock verification report has unexpected device state")
+    stock_evidence = verify_stock(spec, stock)
 
     devices = subprocess.run(["adb", "-P", str(args.adb_port), "devices"], check=True,
                              capture_output=True, text=True, timeout=30).stdout
@@ -111,8 +171,7 @@ def main():
         "observed": {"properties": props, "kernel_release": release,
                      "selinux": selinux, "battery_percent": battery_percent,
                      "host_free_bytes": host_free},
-        "stock_manifest_sha256": sha256(manifest_path),
-        "stock_verification_sha256": sha256(verification_path),
+        **stock_evidence,
         "kernel_common_commit": spec["kernel"]["common_commit"],
         "note": "Read-only preflight; no kernel, rootfs, firmware bundle, flash, or acceptance has run."
     }

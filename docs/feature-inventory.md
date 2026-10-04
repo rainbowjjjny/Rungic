@@ -2829,8 +2829,9 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - Motorola bootloader 的 fastboot 值与 Android 属性表示不同（多行、少末尾字符），两边分别记录、严格比对，不能为通过而放宽。 [docs/79-g100-ci-execution.md](../docs/79-g100-ci-execution.md) [profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md](../profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md)
 - Android/fastbootd 回 bootloader 常只断开 USB、需要重插；bootloader 直接刷第二个 super 分片曾卡住并报 error -71。不要循环重刷，超级分区走 fastbootd，进入前清 fb_mode。 [docs/79-g100-ci-execution.md](../docs/79-g100-ci-execution.md) [profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md](../profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md)
 - 改执行参数要发新的 adapter 和包，不能改已绑定哈希的旧 spec 后继续用。 [profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md](../profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md)
+- Pixel 原厂报告没有 Motorola manifest 或 super 分片；按 spec 声明的分区逐项核对，husky 的模块信任证书待 Task 1.4 回填，不能把离线预检当作真机验收。 [profiles/devices/google/husky/CP1A.260405.005-knowledge.md](../profiles/devices/google/husky/CP1A.260405.005-knowledge.md)
 
-文档：[docs/01-device.md](../docs/01-device.md)、[docs/77-g100-three-ci-assessment.md](../docs/77-g100-three-ci-assessment.md)、[docs/78-g100-firmware-inventory.md](../docs/78-g100-firmware-inventory.md)、[docs/83-x70-air-pro-onboarding.md](../docs/83-x70-air-pro-onboarding.md)
+文档：[docs/01-device.md](../docs/01-device.md)、[docs/77-g100-three-ci-assessment.md](../docs/77-g100-three-ci-assessment.md)、[docs/78-g100-firmware-inventory.md](../docs/78-g100-firmware-inventory.md)、[docs/83-x70-air-pro-onboarding.md](../docs/83-x70-air-pro-onboarding.md)、[profiles/devices/google/husky/CP1A.260405.005-knowledge.md](../profiles/devices/google/husky/CP1A.260405.005-knowledge.md)
 
 #### 自编 GKI 设备底座
 

@@ -133,3 +133,4 @@
 
 - {path: docs/107-android-sms.md, kind: journal, note: 安卓 SIM 短信接口与 USB G100 验收}
 - {path: docs/108-husky-port.md, kind: journal, note: Pixel 8 Pro（husky）移植计划与记录}
+- {path: profiles/devices/google/husky/CP1A.260405.005-knowledge.md, kind: reference, note: husky 原厂基线、Pixel 预检契约与待验收边界}

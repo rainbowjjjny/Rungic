@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "google/husky/CP1A.260405.005",
+  "identity": {
+    "product": "husky",
+    "device": "husky",
+    "sku": "GE9DP",
+    "fingerprint": "google/husky/husky:16/CP1A.260405.005/15001963:user/release-keys",
+    "bootloader": "ripcurrent-16.4-14540574"
+  },
+  "stock": {
+    "format": "pixel-factory",
+    "archive_name": "husky-cp1a.260405.005-factory-c22affec.zip",
+    "archive_sha256": "c22affece233e05bbbbd61a9f919ebf329f9532a78c1882dbc5ee105ebfbc105",
+    "boot_sha256": "f102b2951357e6536b15cad20e69e14064e1ba5cb9f84c97cc477d204e0361d7",
+    "init_boot_sha256": "f18685aef7a50581d5261fe9940214b3a7db4d310d8891810cde487b219b57fe",
+    "vendor_boot_sha256": "94f36d97bc90344220938028e44428bc613c1860b6978da007ee1f947c2ee0fa",
+    "vendor_kernel_boot_sha256": "83c03581fcb3cd17fed04e12958b937832009b67a5a20188bcc871902a4b1bf1",
+    "dtbo_sha256": "486a9c2e9711f9e3b66c92c5b254f7bd6f0dd419f32bbe88306451ef3403c3c5",
+    "vbmeta_sha256": "154190dc6084db79ff7dcf80ad303fce8f0f3f9816c9cb2b5ce328e58739a718",
+    "vbmeta_system_sha256": "8a9a27391db17a1931f931851038291dc320423a7ced62231033106719bf81dd",
+    "vbmeta_vendor_sha256": "ecf34706d16ad75fc7e489b7bf8ec3be9e20877dae01d243c566aaffdc1c02a4",
+    "vendor_dlkm_sha256": "8a3d28fc45a0ca89e2e8e04c468c09e0ed129cf739baaec7b3d314bea31e4d33",
+    "system_dlkm_sha256": "53656f1f8a16f62c854ea07dceae1a85d16f44b583c7521beb5ee9fdf7727b44",
+    "avb_public_key_sha1": "69da4e73583acf8741905c590537f6b73d8c69df"
+  },
+  "kernel": {
+    "manifest_repository": "https://android.googlesource.com/kernel/manifest",
+    "manifest": "kernel/targets/gki/android14-6.1-manifest.xml",
+    "ci_build": 14691759,
+    "common_repository": "https://android.googlesource.com/kernel/common",
+    "common_commit": "fa1d6308d1fe803c3fdebcd3ee6f7a1155fc3462",
+    "stock_release": "6.1.145-android14-11-gfa1d6308d1fe-ab14691759",
+    "page_size": 4096,
+    "module_trust_certificate_sha256": null
+  },
+  "release_requirements": {
+    "arch": "arm64",
+    "android_api": 36,
+    "rootfs_arch": "arm64",
+    "minimum_battery_percent": 30,
+    "minimum_host_free_gib": 120,
+    "host_reserve_gib": 60
+  },
+  "deployment": {
+    "phone_http_proxy": ""
+  },
+  "purity": {}
+}

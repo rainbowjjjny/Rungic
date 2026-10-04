@@ -623,8 +623,11 @@ features:
         docs: [docs/79-g100-ci-execution.md, profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md]
       - text: 改执行参数要发新的 adapter 和包，不能改已绑定哈希的旧 spec 后继续用。
         docs: [profiles/devices/motorola/vantage_cn/W2WV36.55-75-15-knowledge.md]
+      - text: Pixel 原厂报告没有 Motorola manifest 或 super 分片；按 spec 声明的分区逐项核对，husky 的模块信任证书待 Task 1.4 回填，不能把离线预检当作真机验收。
+        docs: [profiles/devices/google/husky/CP1A.260405.005-knowledge.md]
     code:
       - profiles/
+      - profiles/devices/google/husky/CP1A.260405.005.json
       - tools/prepare_g100_stock.py
       - tools/prepare_pixel_stock.py
       - tools/verify_g100_stock.py
@@ -638,6 +641,7 @@ features:
       - docs/77-g100-three-ci-assessment.md
       - docs/78-g100-firmware-inventory.md
       - docs/83-x70-air-pro-onboarding.md
+      - profiles/devices/google/husky/CP1A.260405.005-knowledge.md
 
   - id: install.gki-kernel
     title: 自编 GKI 设备底座
