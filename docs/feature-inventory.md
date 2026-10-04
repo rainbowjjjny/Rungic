@@ -4,7 +4,7 @@
 
 以产品功能和用户场景为骨架：每条功能是用户能感知的一件事；“体验”是它必须做到的，每条都标明由什么检查（自动测试、实机验收、人工验证或已登记的缺口）。数据在 `quality/`，规则见 [quality/README.md](../quality/README.md)。
 
-共 161 条功能、681 条体验，其中 637 条有检查。
+共 161 条功能、682 条体验，其中 638 条有检查。
 
 ## Agent 能力
 
@@ -2859,9 +2859,10 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 
 - **E1** 镜像不带个人账户、密码、凭据或构建机痕迹：只有一个口令锁定的 UID 1000 模板账户，没有账户完成标记，home 里没有别的条目；违反时拒绝出镜像，报错里不出现口令哈希。（单元测试、人工）
 - **E2** 预装集合按清单：被排除的独立应用（Angelfish、Haruna、Journald Browser、KleverNotes、Marknote）不在镜像里，Emoji Selector 入口被 dpkg 排除，桌面与 Emoji 字体保留；旧树有残留时拒绝。（单元测试、人工）
-- **E3** 镜像里的包安装干净：dpkg --audit、apt-get check、ext4 检查通过；APT pin 按本次 manifest 重新生成，不留旧 release 的 pin。（系统测试、人工）
+- **E3** 镜像里的包安装干净：dpkg --audit、apt-get check、ext4 检查通过；APT pin 按本次 manifest 重新生成，不留旧 release 的 pin。（单元测试、系统测试、人工）
 - **E4** 按输入指纹复用产物：安装包里组件被替换、缺少构建绑定、输入被改或依赖未解析时 verify 拒绝。（单元测试、人工）
 - **E5** 在 x86 主机上构建 ARM64 root 树时，chroot 不继承宿主的 Python 设置和 HOME，但保留代理。（单元测试）
+- **E6** 可以在原生 ARM64 Linux 容器中从 Ubuntu archive 和本地发布仓库生成全新 root 树；先核验输入和排除项，拒绝覆盖已有输出，记录完整包版本、架构及 deb 摘要，按锁重建时拒绝闭包或包内容变化。（单元测试）
 
 注意：
 - PRoot 下 systemd 安装脚本的原子改名报 EXDEV；改用独立 user/mount namespace 的真实 chroot 加 QEMU。 [docs/80-g100-image-installation-retrospective.md](../docs/80-g100-image-installation-retrospective.md)
@@ -2869,8 +2870,9 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - 旧准备树的 /dev/null 曾被重定向写成普通文件；从清理过的 root 树开始，arm64_chroot 在私有挂载命名空间里绑定真实 /dev。 [docs/93-x70-independent-image-revalidation.md](../docs/93-x70-independent-image-revalidation.md)
 - build_rootfs_image.py 只打包已准备好的 root 树，不是包下载与全自动安装器；复用旧树前先在构建 chroot 里卸掉排除清单的包。 [docs/75-image-build-separation.md](../docs/75-image-build-separation.md) [.agents/skills/rungic-three-stage-image/references/tool-map.md](../.agents/skills/rungic-three-stage-image/references/tool-map.md)
 - 组合 rootfs/host 的执行器要在 podman unshare 内运行，不能在其中再启动 Podman；mtime 不进缓存键，不承诺逐字节可复现。 [docs/94-build-fingerprints.md](../docs/94-build-fingerprints.md)
+- 从零 bootstrap 的容器安装与首装仍待验收；Ubuntu 滚动 archive 需要保留完整 deb 池并按包锁重建，Mac 输出用 Linux volume 保留属主；旧基线未记录的手工默认不能从 Git 还原。 [docs/108-husky-port.md](../docs/108-husky-port.md)
 
-文档：[docs/75-image-build-separation.md](../docs/75-image-build-separation.md)、[docs/94-build-fingerprints.md](../docs/94-build-fingerprints.md)
+文档：[docs/75-image-build-separation.md](../docs/75-image-build-separation.md)、[docs/94-build-fingerprints.md](../docs/94-build-fingerprints.md)、[docs/108-husky-port.md](../docs/108-husky-port.md)
 
 #### 构建 Rungic 应用
 

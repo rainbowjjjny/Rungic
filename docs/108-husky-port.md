@@ -201,7 +201,7 @@ Codex 负责 2.1–2.4 的代码与测试；Claude 审查、合并并在 M4 实�
 |---|---|---|---|
 | 3.1 | ARM64 构建容器：用 `tools/pq/arm64-host.Dockerfile` 在本机 Docker 建镜像；`tools/build_on_device.py` 的构建主机改为可配置，增加本机 Docker 目标（现写死原作者的 Mac mini） | 本机可用的打包环境 | Codex 改代码，Claude 实测 |
 | 3.2 | 编 `release/packages.json` 里 15 个重建包，以及 `rungic_package.py` 管理的 20 个项目包 | 本地 APT 仓库 | Claude 执行，失败交 Codex 排查 |
-| 3.3 | 新工具：用 mmdebstrap 按 `rungic-release` 元包闭包，从零搭 arm64 root 树（实现 `docs/75:38`），再交给 `build_rootfs_image.py` | rootfs 镜像、包锁、报告 | Codex 写工具，Claude 执行 |
+| 3.3 | `bootstrap_rootfs.py` + 原生 ARM64 Docker 入口：核验本地 APT 池/发布清单 → mmdebstrap 安装元包闭包与运行清单 → 准备锁定账户模板 → 核验/保存完整 deb 包锁 → 交给 image/host builder；具体命令见下节 | root 树、完整 deb 池、包锁、bootstrap 报告；容器执行后另产镜像报告 | Codex 工具/离线测试已实现，Claude 待执行容器验收 |
 | 3.4 | Alpine LXC 运行环境、静态 `rungic_lxc_enter`/`rungic_plasma_enter`、cast JAR，做 host seed | host seed 与报告 | Codex + Claude |
 | 3.5 | Termux 依赖（`termux.apk`、带 PulseAudio 的 prefix）和 `rungic-sparse-write`，全部从官方来源下载并固定哈希 | deps | Claude |
 | 3.6 | APK：Rust 宿主（`aarch64-linux-android`）、`libxkbcommon`（可参考社区脚本）、`build-apk.sh`；改掉写死的 NDK 路径和代理 | `rungic.apk` | Codex 改脚本，Claude 构建 |
@@ -217,6 +217,67 @@ M3 的每个任务开始前，先把它展开成带验收命令的步骤，写�
 - [x] 离线验收命令：`/Users/litaotan/projects/Rungic/.work/venv/bin/python -m pytest -q tools/test_mesa_packaging.py tools/test_build_on_device.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py`，以及同一 Python 的 `tools/pq.py lint`；结果与本机限制见记录。
 - [ ] Claude 在可访问 Docker socket 的会话里核验 `hostname`、`uname -m`、`route -n get default`、`scutil --proxy` 与 `docker info --format '{{.Architecture}} {{.NCPU}} {{.MemTotal}}'`；实际准备镜像：`PYTHONPATH=tools python3 -c 'import build_on_device as b; h=b.use("local-docker"); h.ensure(); print(h.image(), h.jobs)'`；随后 `docker exec rungic-build sh -c 'uname -m; . /etc/os-release; echo "$VERSION_CODENAME"; llvm-config-21 --version'`，确认 aarch64、resolute 与 LLVM 21。此步骤会建镜像，本次代码任务不执行。
 - [ ] 长构建由 3.2 执行：`python3 tools/build_mesa.py --host local-docker`；包锁与产物另行记录。2.3 的实际 llvmpipe 渲染验收仍需构建后以软件 GL 探针核对，不能用离线配置测试代替。
+### 任务 3.3：从零生成 CI2 root 树
+
+- [x] 先写离线失败测试，再实现 `tools/ci/bootstrap_rootfs.py`。输入逐项列在模块 docstring：3.2 的**已实体化** flat APT 仓库（`Packages`、`Release`、rebuilt/project/metapackage `.deb`；`.remote` 记录不够）、对应发布 JSON、`release/packages.json`、运行/排除包清单、精确 Mozilla Firefox `.deb` 版本、已认证 Mozilla 公钥、固定 epoch、Ubuntu mirror、可选完整包锁。Ubuntu 使用 resolute、updates、security 和四个组件；默认 TUNA ports。没有使用旧二进制 root 基线、QEMU 或手机查询。
+- [x] mmdebstrap setup hook 在第一次解析依赖前写优先级 1001 的版本 pin、临时排除包负 pin 与既有 dpkg 应用过滤；安装 `rungic-release=版本`、运行清单与 `firefox=版本`，关闭 Recommends，排除项若属于硬依赖则失败。源码依据为 [mmdebstrap 1.5.7 手册](https://manpages.debian.org/trixie/mmdebstrap/mmdebstrap.1.en.html) 的 setup/customize、file-mirror-automount、essential/unlink 与 SOURCE_DATE_EPOCH 接口（MIT）；采用成熟 APT 解析与真实 chroot，不自行做依赖解析。社区 kit 的两个 raw 脚本本轮抓取失败；只保留既有调用经验，不声称核实其账户/配置实现。Ubuntu 包版权由安装后的 `/usr/share/doc/*/copyright` 保存。
+- [x] 包外准备仅按已有源码契约：`rungic:1000:1000`、`/home/rungic` 与 Ubuntu skel、root/模板锁定口令（host seed / fresh-account）、`zh_CN.UTF-8`（`desktop/session`）、早期日志目录（`system/init`）、machine-id/SSH key/DNS 清理（image builder）。账户完成标记、共享目录、音频 cookie 与 SELinux 上下文交给 CI3；不添加密码免认证 sudo、linger 或个人桌面设置。其余配置由 release 的项目包提供，SSH socket 自动启用必须通过检查。
+- [x] 结果为 Linux volume 中的 `/<run>/root`，同时输出 `packages.lock.tsv`、带每个 `.deb` SHA256 的 `packages.lock.json`、可重新索引/使用的完整 `debs/` 池、`bootstrap-report.json`。安装核验包含 `apt-get check`、非空 `dpkg --audit` 拒绝、项目 clicker venv `pip check`、SSH socket、嵌入 manifest、账户协议 2、模板/属主、排除项。锁/报告也写入 root 的 `/usr/share/rungic/build/`。失败目录保留用于诊断，再跑须选新 run 名，不能覆盖或自动接着半棵树安装。
+- [x] 离线验收：`/Users/litaotan/projects/Rungic/.work/venv/bin/python -m pytest -q tools/ci/test_bootstrap_rootfs.py tools/ci/test_rootfs_isolation.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py`；同一 Python 跑 `tools/pq.py lint`；功能归属登记在 `install.rungicos-image`，总览由 `tools/feature_inventory.py render --write` 生成。
+- [ ] Claude 在有 Docker socket 的会话先核验本机身份、路由、系统代理、Docker `linux/aarch64`。wrapper 每次读取系统代理，loopback 改为 `host.docker.internal` 并传给 Docker build/run；容器也输出身份、架构、路由和代理。输出用独立 Linux named volume `rungic-rootfs`，仓库/源码/manifest/key 只读挂载，不在 Mac 共享目录上创建客体系统树。Dockerfile 单独提供小型 bootstrap/打包环境，固定 base digest 与现有 ARM64 host 一致，不安装庞大的开发主机包集。
+
+执行命令（先把 `RUNGIC_OS_RELEASE`、`RUNGIC_FIREFOX_VERSION` 设为 3.2 **实际产物**的版本；Mozilla key 默认复用 Git 中 `system/config/etc/apt/keyrings/packages.mozilla.org.asc`，由 config 包安装，工具核验已记录指纹 `35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3` 和安装后字节，不另下载密钥）：
+
+```sh
+python3 tools/ci/bootstrap_rootfs_docker.py \
+  --repo .work/apt/repo \
+  --release ".work/apt/releases/${RUNGIC_OS_RELEASE}.json" \
+  --firefox-version "$RUNGIC_FIREFOX_VERSION" \
+  --source-date-epoch "$(git show -s --format=%ct HEAD)" \
+  --output-name "husky-${RUNGIC_OS_RELEASE}"
+```
+
+加 `--print-only` 只检查输入并打印展开后的**完整 Docker build/run 命令**，不接触 Docker；实际执行则先验证 Docker server 架构。默认 mirror 为 `http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports`，可用 `--mirror` 改为保留的 Ubuntu snapshot。bootstrap 完成后，同一 volume 的树直接交给 image builder（特权容器已是 Linux root，此处使用 `--inside`，不在其中嵌套启动 Podman）：
+
+```sh
+docker run --rm --platform linux/arm64 --privileged \
+  --mount "type=bind,src=$PWD,dst=/src,readonly" \
+  --mount "type=bind,src=$PWD/.work/apt/releases/${RUNGIC_OS_RELEASE}.json,dst=/inputs/release.json,readonly" \
+  --mount type=volume,src=rungic-rootfs,dst=/output \
+  rungic-rootfs-bootstrap:26.04 \
+  python3 /src/tools/ci/build_rootfs_image.py --inside \
+  --root "/output/husky-${RUNGIC_OS_RELEASE}/root" \
+  --release /inputs/release.json \
+  --output "/output/husky-${RUNGIC_OS_RELEASE}/image/rootfs.img" \
+  --size-gib 16 --firefox-version "$RUNGIC_FIREFOX_VERSION"
+```
+
+- [ ] 核对 bootstrap 报告、`image/rootfs-report.json`、包锁和 `e2fsck`，3.4 的 `build_host_seed.py --inside --rootfs-tree /output/husky-<release>/root …` 消费同一棵树；不通过 Mac tar 解包再包装以免改变属主/属性。16 GiB 为本次候选参数，仍需 M4 实机核对容量与首装。
+- [ ] 按锁重建验收：在同一 Linux volume 中，用上一 run 的 `debs/`（已经有 `Packages` / `Release`）作为 `--repo`，上一 run 的 `packages.lock.json` 作为 `--package-lock`，同一 manifest/key/epoch/mirror 与新 `--output` 直接调用 `bootstrap_rootfs.py`；按上面的 Docker mounts 加载 `/output` 即可，无需把大包池复制到 Mac。比较两个 `packages.lock.json`（应相同）与 bootstrap 报告里的包锁摘要；改变一个 deb 或锁中的版本应拒绝。滚动 archive 首次解析不承诺闭包不变，重放需要保留 deb 池与兼容的 Ubuntu archive/snapshot；epoch/包字节与配置可锁定，维护脚本和 ext4 逐字节复现尚未验收。
+
+```sh
+docker run --rm --platform linux/arm64 --privileged \
+  --mount "type=bind,src=$PWD,dst=/src,readonly" \
+  --mount "type=bind,src=$PWD/.work/apt/releases/${RUNGIC_OS_RELEASE}.json,dst=/inputs/release.json,readonly" \
+  --mount type=volume,src=rungic-rootfs,dst=/output \
+  rungic-rootfs-bootstrap:26.04 \
+  python3 /src/tools/ci/bootstrap_rootfs.py \
+  --repo "/output/husky-${RUNGIC_OS_RELEASE}/debs" \
+  --release /inputs/release.json \
+  --package-lock "/output/husky-${RUNGIC_OS_RELEASE}/packages.lock.json" \
+  --firefox-version "$RUNGIC_FIREFOX_VERSION" \
+  --source-date-epoch "$(git show -s --format=%ct HEAD)" \
+  --output "/output/husky-${RUNGIC_OS_RELEASE}-replay"
+docker run --rm --mount type=volume,src=rungic-rootfs,dst=/output,readonly \
+  rungic-rootfs-bootstrap:26.04 cmp \
+  "/output/husky-${RUNGIC_OS_RELEASE}/packages.lock.json" \
+  "/output/husky-${RUNGIC_OS_RELEASE}-replay/packages.lock.json"
+```
+
+重放容器的联网同样需带本轮系统代理对应的 `--env http_proxy=… --env https_proxy=…`（wrapper 已打印具体值），或者使用可直接访问的 archive snapshot；不能默认沿用历史代理或直连。
+
+**明确未决问题：** Git 没有旧 baseline 树，不能恢复其中未记录的手工默认或额外应用。源码可推出的配置已实现，其余不猜测。本 release 的干净依赖闭包能否通过 clicker `pip check`、新账户准备、Plasma/llvmpipe 与既有硬件路径，需要真实容器及 CI3/M4 验收；容器 hook、权限/xattr、完整 package lock、image 与 host seed 的真实输出也尚待执行。离线替身测试不替代这些结果。
+
 ### 任务 3.7：从 boot 生成内核报告
 
 - 先写 `tools/ci/test_kernel_report.py` 的合成 v4 boot 测试并运行，确认失败；覆盖 gzip、LZ4 legacy、未压缩 Image、全文件摘要、错误头/截断/缺版本串及可选 Image 不匹配。
@@ -235,6 +296,8 @@ M3 的每个任务开始前，先把它展开成带验收命令的步骤，写�
 ## 记录
 
 - 2026-10-04：**2.3 实机构建验收通过。** 本机 Docker（`--host local-docker`）编出 Mesa 1,669 个目标并打包。首次安装失败：`mesa-libgallium` 带了 `gbm/dri_gbm.so`，而 Ubuntu resolute 当前的 `libgbm1`（26.0.8-1ubuntu0.3）也拥有它，dpkg 拒绝覆盖。改为与 Ubuntu 一致放进 `libgbm1`（先写失败测试），升到 `+rungic5`。干净容器中 5 个包全部安装成功；`EGL_PLATFORM=surfaceless eglinfo -B` 显示渲染器 `llvmpipe (LLVM 21.1.8, 128 bits)`，OpenGL 4.6 Core；`kgsl_dri.so`、`zink_dri.so` 仍在。另：本机需先建 `rungic-pq:26.04`（`docker build -t rungic-pq:26.04 -f tools/pq/Dockerfile tools/pq`），`build_mesa.py` 不会自动构建它。
+- 2026-10-04：Codex 在 `task/m3-rootfs-bootstrap` 实现 **3.3 工具与离线验证**，按要求全部保留未提交。先写测试，缺少 bootstrap 模块时确认收集失败；随后加入原生 ARM64 Linux 的 mmdebstrap 从零 root 树入口、独立固定 base Dockerfile 与薄 wrapper。输入先核验实体化 APT pool、索引/deb 摘要、release/packages.json 三类选择、精确发布/Firefox 版本及排除项；setup hook 先写 1001 pin，customize 核验嵌入 manifest、协议 2、锁定 UID/GID1000 模板、home、安装闭包、SSH socket 与 pip。保留每个 deb 并生成可用于重放的完整 APT 池、版本/架构/内容锁和报告；拒绝覆盖及重放中的集合/字节变化。包外配置仅复用源码证明的账户、locale、日志与身份清理；Mozilla 公钥由现有 config 包提供，手机代理仍由 CI3 firstboot 写入。新文件已登记 `install.rungicos-image`，总览重生成。指定 venv 的新测试、`test_rootfs_isolation.py`、`test_feature_inventory.py`、`test_dev_guide.py` 合计 **57 passed、20 subtests passed**；`tools/pq.py lint` 与 `git diff --check` 退出 0。现场为 `LitaodeMac-Studio.local` / arm64，系统代理为空，路由查询被沙箱拒绝；按本次限制没有访问 Docker、生成 rootfs/image、安装软件或访问手机。未记录的旧 baseline 默认无法从 Git 还原，干净闭包 pip/账户/Plasma 与 hook、文件属性、image/host 输出仍待容器及 CI3/M4 验收；详情、完整输入及运行/重放/打包命令见 3.3 和模块 docstring。
+
 - 2026-10-04：Codex 在 `task/m2-container` 完成 Tasks 2.1、2.2、2.5 的仓库改动，全部保留未提交。先读 M2/M3、全局约束及 30/31、40、61 篇，并核对现有 KWin Android 后端补丁、[LXC 可选挂载文档](https://linuxcontainers.org/lxc/manpages/man5/lxc.container.conf.5.html)与 [Mesa 驱动覆盖文档](https://docs.mesa3d.org/envvars.html)，复用现有 QPainter/SHM 路径；未引入新的上游代码或依赖。按 TDD 先确认新增测试失败，再实现：KGSL 与 DMA heap 独立按字符设备存在性生成规则，缺失只记日志，挂载可选；覆盖 husky「有 DMA heap、无 KGSL」、两项独立缺失、非字符节点及 Qualcomm 当前设备号/错误保留。无 KGSL 时保留 `KWIN_COMPOSE=Q`、`QT_QUICK_BACKEND=software`，清除旧 Adreno 环境和用户管理器残留；UBWC 仅供 KGSL，Qualcomm 的 GL/Turnip/Flatpak 设置保持原行为。四项指定验收从 Android root 只读判断 KGSL，缺失时写 `status="not applicable"`、`passed=null`、原因与 `not_applicable_ids`，不运行相应检查、不贡献指标或通过数；设备状态读不懂仍失败，Qualcomm 容器漏挂设备仍属契约失败。功能清单、生成总览及 30/31 篇已同步；没有新增文件。指定 venv 的 `python -m pytest -q tools/ci/test_container_control.py tools/tests/test_gpu_env.py tools/tests/test_acceptance_scenarios.py tools/tests/test_acceptance_restore.py tools/test_feature_inventory.py tools/tests/test_dev_guide.py` 为 **52 passed、19 subtests passed（20.06 秒）**；`python tools/pq.py lint`、四个修改脚本逐一 `sh -n`、`git diff --check` 均退出 0，清单严格检查为 161 项功能、0 errors，44 项既有 device-only 欠账未增加。本轮没有构建、部署或访问手机；Mesa llvmpipe 包由 Task 2.3 完成，真实桌面/触摸仍待 M4 验收。
 - 2026-10-04：Codex 在 `task/m2-mesa-builder` 完成 **2.3、3.1 的代码与离线验证**，全部保留未提交。先写失败测试，再加入 softpipe/llvmpipe、启用 LLVM，保留 freedreno/zink、KGSL 与 Turnip；Mesa 版本升至 `26.3.0~devel20260824+rungic4`。复用原固定 lfdevs 源码（许可证仍由 `packages/mesa/recipe.json` 与上游 `docs/license.rst` 记录），CPU 驱动依据 [Mesa 官方 llvmpipe 文档](https://docs.mesa3d.org/drivers/llvmpipe.html)；运行依赖 `libllvm21 (>= 1:21.1.0)` 来自 [Ubuntu resolute mesa-libgallium 元数据](https://packages.ubuntu.com/fr/resolute/mesa-libgallium)，对应 [源码包的 llvm-21-dev](https://packages.ubuntu.com/source/resolute/mesa)，不是猜测包名。构建器加入 `RUNGIC_BUILD_SSH` / `--ssh-host` 和原生 `local-docker`，复用原 Dockerfile/卷及系统代理逻辑；按 Docker VM CPU、每 2 GiB 一个任务、最多 4 个任务限制并行度，项目包和 SDK 包同样受限，原作者默认 Mac mini 与手机路径保留。另修复已有 Mesa 构建目录未重新配置的问题，确保旧 `llvm=disabled` 缓存也接收新选项。新测试登记于 `apps.gpu` / `delivery.build-hosts`，功能总览已生成；测试说明 husky 的 CPU GL 需求并覆盖 Qualcomm/Adreno 路径。指定 venv 的要求测试集合为 **42 passed、45 subtests passed、1 failed**：唯一失败为原有真实 Ninja 增量子测试，本机缺 `ninja`，在 `HEAD` 原版中同样复现；macOS make 3.81 的秒级时间戳测试抖动已改为明确设置旧产物时间。排除此旧测试并加入 `tools/test_system_test.py` 为 **44 passed、44 subtests passed、1 deselected**；扩展 `tools/test_rungic_package.py` 为 4 passed、4 failed，四个 GNU install/stat、ELF 链接与沙箱优先级相关失败在 `HEAD` 原版中相同复现。`tools/pq.py lint`、`sh -n tools/pq/rungic-transfer`、生成的 Mesa preinst 语法检查及 `git diff --check` 均退出 0。现场主机为 `LitaodeMac-Studio.local` / arm64，`scutil --proxy` 为空；路由与 Docker socket 查询被沙箱拒绝。因此本轮没有创建镜像、运行长构建、访问手机或验证实际 llvmpipe 输出，镜像与渲染验收仍待 Claude 执行；日志与原版对照放 `.work/husky/task-m2-mesa-builder/`。
 
