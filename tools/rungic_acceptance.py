@@ -11,6 +11,8 @@ A check returns passed/metrics/details; metrics are compared with the newest rep
 earlier release. Results: .work/acceptance/<release>/<time>/report.json. Every scenario
 restores what it changes (accessibility, display scale, recordings it made). Items that
 automatic checks do not replace are listed as manual in each report.
+Scenarios whose required Android character device is absent report 'not applicable', with
+a reason and passed=None. They contribute neither failures nor passing checks or metrics.
 """
 import argparse
 import datetime
@@ -938,6 +940,30 @@ def bring_to_front(timeout=10):
     return {'was_in_front': was, 'in_front': top()}
 
 
+def applicability(scenario, devices):
+    """Probe Android root, not the container: a broken Qualcomm bind must still fail
+    its check. Cache presence for this run; unreadable state is a failure, never N/A."""
+    required = scenario.get('requires_character_device')
+    if not required:
+        return None
+    path = required['path']
+    reason = required['reason']
+    if not reason.strip():
+        raise ValueError(f'{scenario["id"]}: device requirement needs a reason')
+    if path not in devices:
+        node = shlex.quote(path)
+        probe = run(f'if [ -c {node} ]; then echo present; '
+                    f'elif [ ! -e {node} ]; then echo absent; else echo invalid; fi', 'root')
+        state = probe.stdout.strip()
+        if probe.returncode or state not in ('present', 'absent'):
+            raise RuntimeError(f'Cannot determine character device {path}: {state!r}')
+        devices[path] = state
+    if devices[path] == 'absent':
+        return {'passed': None, 'status': 'not applicable', 'metrics': {},
+                'details': {'reason': reason, 'missing_device': path}}
+    return None
+
+
 def run_scenarios(selected, release=None, out_dir=None, since=None, skips=None):
     skips = skips or {}
     unknown = set(skips) - {s['id'] for s in selected}
@@ -952,7 +978,7 @@ def run_scenarios(selected, release=None, out_dir=None, since=None, skips=None):
     ctx = {'spec': spec, 'since': since or started, 'release': release, 'out_dir': out_dir,
            'previous_metrics': {s['id']: s.get('metrics', {}) for s in (base or {}).get('scenarios', [])}}
     ctx['front'] = bring_to_front()
-    rows = []
+    rows, devices = [], {}
     for scenario in selected:
         fn = CHECKS.get(scenario['check'])
         began = time.monotonic()
@@ -963,7 +989,9 @@ def run_scenarios(selected, release=None, out_dir=None, since=None, skips=None):
             row = {'passed': None, 'metrics': {}, 'details': {'skipped': 'check not implemented'}}
         else:
             try:
-                row = fn(ctx, **scenario.get('params', {}))
+                row = applicability(scenario, devices)
+                if row is None:
+                    row = fn(ctx, **scenario.get('params', {}))
             except Exception as error:
                 row = result(False, error=f'{type(error).__name__}: {error}',
                              trace=traceback.format_exc()[-1500:])
@@ -978,13 +1006,17 @@ def run_scenarios(selected, release=None, out_dir=None, since=None, skips=None):
         row = {'id': scenario['id'], 'title': scenario['title'], 'level': scenario['level'], **row,
                'seconds': round(time.monotonic() - began, 1)}
         rows.append(row)
-        mark = {True: 'PASS', False: 'FAIL', None: 'SKIP'}[row['passed']]
-        print(f"{mark} {scenario['id']} ({row['seconds']} s)", flush=True)
+        not_applicable = row.get('status') == 'not applicable'
+        mark = 'N/A' if not_applicable else {True: 'PASS', False: 'FAIL', None: 'SKIP'}[row['passed']]
+        reason = f": {row['details']['reason']}" if not_applicable else ''
+        print(f"{mark} {scenario['id']} ({row['seconds']} s){reason}", flush=True)
+    applicable = [r for r in rows if r.get('status') != 'not applicable']
     report = {'release': release, 'time': stamp, 'front': ctx['front'], 'scenarios': rows, 'manual': spec.get('manual', []),
-              'passed': bool(rows) and all(r['passed'] is True or
-                                          r['details'].get('explicit_scope_exclusion') for r in rows),
-              'complete': all(r['passed'] is not None for r in rows),
-              'skipped_ids': [r['id'] for r in rows if r['passed'] is None],
+              'passed': bool(applicable) and all(r['passed'] is True or
+                                                r['details'].get('explicit_scope_exclusion') for r in applicable),
+              'complete': all(r['passed'] is not None for r in applicable),
+              'not_applicable_ids': [r['id'] for r in rows if r.get('status') == 'not applicable'],
+              'skipped_ids': [r['id'] for r in applicable if r['passed'] is None],
               'failed_ids': [r['id'] for r in rows if r['passed'] is False]}
     base_path, base = previous_report(release, {r['id'] for r in rows})
     if base:
@@ -1024,7 +1056,7 @@ def main():
                 parser.error('--skip requires ID=REASON')
             skips[key] = reason
         report = run_level(a.cmd, a.release, skips=skips)
-    print(json.dumps({k: report[k] for k in ('passed', 'failed_ids', 'path')}, ensure_ascii=False))
+    print(json.dumps({k: report[k] for k in ('passed', 'failed_ids', 'not_applicable_ids', 'path')}, ensure_ascii=False))
     return 0 if report['passed'] else 1
 
 

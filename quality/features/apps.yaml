@@ -104,16 +104,16 @@ features:
     status: live
     platform: linux
     interfaces: [kwin-android-host]
-    summary: 桌面和原生 Wayland 应用经本项目的 Mesa（KGSL 上的 freedreno）用 Adreno 710 画画面，Qt Quick 和 GTK 默认 GL。
+    summary: 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 的手机保留软件渲染默认，Mesa 不强制选择 KGSL。
     experience:
       - id: E1
-        text: 普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。
+        text: 有 KGSL 的 Adreno 710 手机上，普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。
         evidence:
           - {doc: docs/40-plasma-mobile-integration.md, date: 2026-09-23, note: "UID1000 实载 FD710 / GLES3.2"}
           - {doc: docs/research/93-xwayland-kgsl-gpu.md, date: 2026-09-30, note: "Krita 6 原生 Wayland 下渲染器 FD710"}
         device: 渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染
       - id: E2
-        text: Qt Quick 应用和 plasmashell 滚动、切换时没有整屏灰色闪帧（会话默认 QSG_RHI_BACKEND=opengl）。
+        text: 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时保留 KWIN_COMPOSE=Q、QT_QUICK_BACKEND=software，清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。
         evidence:
           - {doc: docs/56-kwin-vulkan-quantification.md, date: 2026-09-26, note: "撤回 Vulkan 后 414 帧逐帧检测无闪屏"}
         device: 整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查
@@ -128,8 +128,8 @@ features:
     pitfalls:
       - text: KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。
         docs: [docs/research/74-vaapi-feasibility.md, docs/research/93-xwayland-kgsl-gpu.md]
-      - text: 会话环境 gpu-env 必须带 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software。
-        docs: [docs/40-plasma-mobile-integration.md]
+      - text: 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。
+        docs: [docs/40-plasma-mobile-integration.md, docs/108-husky-port.md]
       - text: 2026-09-26 全局把 Qt Quick 改成 Vulkan 后语音助手整屏灰色闪帧，当天撤回；评估渲染后端必须做逐帧画面检测，不能只看帧间隔和 CPU。
         docs: [docs/56-kwin-vulkan-quantification.md]
       - text: KWin 经 Zink 合成更慢（慢帧 5.06% 对 0.57%），KWin 原生 Vulkan 只省约 0.7–1.5 ms/帧 CPU，不值得维护分支；桌面合成保持 GLES。

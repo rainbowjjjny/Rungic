@@ -1,14 +1,21 @@
 # One coherent Mesa package family, with the distribution GLVND dispatchers.
-export MESA_LOADER_DRIVER_OVERRIDE=kgsl
-export FD_KGSL_ENABLE_DMABUF=1
-export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
-export KWIN_COMPOSE=O2ES
-# Qt Quick stays on OpenGL ES. Vulkan (Turnip) was tried session-wide on 2026-09-26 and
-# reverted: the voice assistant flashed whole grey frames while scrolling (docs/56).
-export QSG_RHI_BACKEND=opengl
-export GSK_RENDERER=gl
-export QT_QUICK_BACKEND=
-# Flatpak apps: this project's Mesa as the runtime's GL extension (rungic-flatpak-gl, docs/49)
-# instead of GL.default, which has no KGSL driver and renders with llvmpipe.
-[ ! -d /var/lib/flatpak/extension/org.freedesktop.Platform.GL.rungic ] || export FLATPAK_GL_DRIVERS=rungic
-unset LIBGL_ALWAYS_SOFTWARE LD_LIBRARY_PATH
+if [ -c /dev/kgsl-3d0 ]; then
+    export MESA_LOADER_DRIVER_OVERRIDE=kgsl
+    export FD_KGSL_ENABLE_DMABUF=1
+    export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
+    export KWIN_COMPOSE=O2ES
+    # Qt Quick stays on OpenGL ES. Vulkan (Turnip) was tried session-wide on 2026-09-26 and
+    # reverted: the voice assistant flashed whole grey frames while scrolling (docs/56).
+    export QSG_RHI_BACKEND=opengl
+    export GSK_RENDERER=gl
+    export QT_QUICK_BACKEND=
+    # Flatpak apps: this project's Mesa as the runtime's GL extension (rungic-flatpak-gl, docs/49)
+    # instead of GL.default, which has no KGSL driver and renders with llvmpipe.
+    [ ! -d /var/lib/flatpak/extension/org.freedesktop.Platform.GL.rungic ] || export FLATPAK_GL_DRIVERS=rungic
+    unset LIBGL_ALWAYS_SOFTWARE LD_LIBRARY_PATH
+else
+    # Non-Qualcomm phones keep session's QPainter / Qt Quick software defaults.
+    # Remove inherited Adreno settings so Mesa can choose a CPU driver (llvmpipe).
+    unset MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF FD_KGSL_DMABUF_UBWC
+    unset VK_DRIVER_FILES QSG_RHI_BACKEND GSK_RENDERER FLATPAK_GL_DRIVERS
+fi

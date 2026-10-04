@@ -590,3 +590,7 @@ G100 ZY32M9MRVP / Android 16 / APK 2.29 开发版通过标准 PA 客户端检查
 链路：0 号（独立桌面）里的应用或 KAuth 辅助程序 → 系统总线 polkitd（只认会话 c126 里唯一注册的代理）→ 手机会话的 polkit-kde-agent（路由，`packages/polkit-kde-agent-1`）→ 读请求进程 `polkit.subject-pid` 的 `DBUS_SESSION_BUS_ADDRESS` → 0 号私有总线上按需激活的 `polkit-kde-authentication-agent-1 --delegate` → 0 号 KWin 里桌面外观的对话框 → polkit-agent-helper-1 凭 cookie 校验密码。代理界面的 `Prompting` 经 `rungic-workspace-stream` 的 `prompting 1|0` 传给浮窗，用来显示提示条。手机会话和无头助理屏工作区的请求不走转发，仍弹在手机上。全屏改为标准全屏窗口后，手机上的授权框、键盘、通知、OSD 都在全屏之上。研究、实现与验收见 [97 篇 §21](97-headless-agent-work.md)。
 
 2026-10-03，开发 G100 的 Codex 默认桌面执行与 API 备选见 [106](../106-codex-desktop-operation.md)。部署工作区脚本须配套当前 KWin 的 virtual-render-device 补丁；旧 +rungic8 会退回 QPainter，截图被取消。主会话重启不重启独立工作区，需在可安全重启时让它加载新版。
+
+## 2026-10-04：无 KGSL 的共享图形入口（离线验证）
+
+启动时 KGSL 与 DMA heap 分别按字符设备存在性授权并可选挂载，不能把 DMA heap 存在当成 Adreno 能力。KGSL 路径仍为应用 → Mesa freedreno/OpenGL → KWin Android 后端 → Android AHB/Adreno；无 KGSL 时保留应用软件渲染 → KWin QPainter/SHM → Android 宿主的共享内存合成路径，`gpu-env` 与用户管理器清除旧 KGSL 驱动覆盖，KWin 不启用 UBWC。后端沿用已有 `android-backend-hooks.patch`，本轮未修改协议或 Android 硬件通路。验收从 Android root 只读核对 KGSL，避免把 Qualcomm 容器漏挂设备误标为不适用；指定的 GPU、录屏、性能与 WFD 检查缺 KGSL 时记录原因与 `passed=null`。上述选择逻辑已用离线替身测试，llvmpipe 构建、真实帧输出和触摸仍待 [108 篇](../108-husky-port.md) 2.3/M4。

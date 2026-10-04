@@ -366,7 +366,7 @@ features:
       - id: E5
         text: 部署和验收期间出现已知签名以外的崩溃即失败；安装之前发生的崩溃不算到新发布上。
       - id: E6
-        text: 报告写到 .work/acceptance/<发布>/<时间>/report.json，并列出自动结果不能替代的人工项（画质、声学、音画同步、拼音手感、投屏）。
+        text: 报告写到 .work/acceptance/<发布>/<时间>/report.json，并列出自动结果不能替代的人工项（画质、声学、音画同步、拼音手感、投屏）。Android 无 KGSL 字符设备时，GPU 契约、录屏快捷设置、Adreno 合成性能和高通 WFD 契约记录 not applicable 及原因，不计为通过或失败；无法读取设备能力仍判失败。
     pitfalls:
       - text: 验收前先看 dumpsys input 的 touchingPointers 为空：一次屏幕右下持续的实体触摸让注入的滑动成了多指手势，快捷设置拉不下来。
         docs: [docs/73-reduce-upstream-changes.md]

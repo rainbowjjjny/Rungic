@@ -60,6 +60,12 @@ kbuildsycoca6 --noincremental
 # The GPU settings into the user manager before any unit of the session starts: startplasma
 # imports its environment too, but a unit (re)started earlier would run without them.
 # The login PATH and the user's login exports too, for units and programs systemd starts.
+# Importing an unset shell variable does not remove the manager's previous value.
+# On phones without KGSL, clear old Adreno settings for all subsequent user units.
+if [ ! -c /dev/kgsl-3d0 ]; then
+    systemctl --user unset-environment MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF FD_KGSL_DMABUF_UBWC \
+        VK_DRIVER_FILES QSG_RHI_BACKEND GSK_RENDERER FLATPAK_GL_DRIVERS 2>/dev/null || true
+fi
 # shellcheck disable=SC2086
 systemctl --user import-environment MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF VK_DRIVER_FILES \
     QSG_RHI_BACKEND GSK_RENDERER QT_QUICK_BACKEND KWIN_COMPOSE FLATPAK_GL_DRIVERS PATH $RUNGIC_LOGIN_VARS 2>/dev/null || true

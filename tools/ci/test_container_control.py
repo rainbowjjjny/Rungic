@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -85,6 +86,17 @@ class Controller(unittest.TestCase):
         # The APK data directory's SELinux label, as Android's ls -dZ prints it.
         executable(stubs / 'ls', '#!/bin/sh\nif [ "$1" = -dZ ]; then echo "u:object_r:app_data_file:s0:c512,c768 $2"; '
                                  'else exec /bin/ls "$@"; fi\n')
+        executable(stubs / 'stat', f'#!{sys.executable}\n' + r"""
+import os, sys
+fmt, path = sys.argv[2:]
+node = os.stat(path)
+# Synthetic Android numbers; no assumption about the development host's /dev majors.
+numbers = {'/dev/null': (1, 3), '/dev/zero': (1, 5), '/dev/tty': (5, 0), '/dev/random': (1, 8)}
+major, minor = numbers.get(path, (os.major(node.st_rdev), os.minor(node.st_rdev)))
+print({'%i': str(node.st_ino), '%t': format(major, 'x'), '%T': format(minor, 'x')}[fmt])
+""")
+        executable(stubs / 'flock', f'#!{sys.executable}\n' +
+                   'import fcntl, sys\nfcntl.flock(int(sys.argv[1]), fcntl.LOCK_EX)\n')
         self.env = dict(os.environ, PATH=f"{stubs}:{os.environ['PATH']}")
         self.devices('/dev/null', '/dev/zero')
 
@@ -128,7 +140,7 @@ class Controller(unittest.TestCase):
     def test_devices_are_granted_by_their_current_numbers(self):
         # After an Android reboot the GPU's character device may have another major:minor.
         for gpu, heap, rules in (('/dev/null', '/dev/zero', ('c 1:3 rw', 'c 1:5 r')),
-                                 ('/dev/full', '/dev/random', ('c 1:7 rw', 'c 1:8 r'))):
+                                 ('/dev/tty', '/dev/random', ('c 5:0 rw', 'c 1:8 r'))):
             self.devices(gpu, heap)
             (self.state / 'running').unlink(missing_ok=True)
             code, _, err = self.run_action('start')
@@ -136,13 +148,42 @@ class Controller(unittest.TestCase):
             start = [line for line in self.log() if line.startswith('start ')][-1]
             for rule in rules:
                 self.assertIn(f'-s lxc.cgroup2.devices.allow={rule}', start)
-        # A node that is missing or not a character device stops the start: nothing is granted blindly.
-        self.devices(str(self.root / 'missing-kgsl'), '/dev/zero')
-        (self.state / 'running').unlink()
+
+    # covers: install.container-base/E1
+    def test_present_qualcomm_device_with_unreadable_numbers_still_fails(self):
+        # Optional absence must not turn a broken Adreno device rule into success.
+        executable(self.root / 'bin/stat', '#!/bin/sh\necho invalid-device-number\n')
         code, _, err = self.run_action('start')
         self.assertNotEqual(code, 0)
-        self.assertIn('Missing character device', err)
-        self.assertEqual(sum(line.startswith('start ') for line in self.log()), 2)
+        self.assertIn('Invalid device number', err)
+        self.assertEqual(self.log(), [])
+
+    # covers: install.container-base/E1
+    def test_non_qualcomm_devices_start_with_only_the_nodes_they_have(self):
+        # Pixel 8 Pro (husky/Mali) has the DMA heap, but no KGSL: desktop startup
+        # must work. Either node can be absent independently; never grant an empty rule.
+        missing = str(self.root / 'missing')
+        regular = self.root / 'regular'
+        regular.touch()
+        for gpu, heap, rules, absent in (
+            (missing, '/dev/zero', ['c 1:5 r'], [missing]),
+            ('/dev/null', missing, ['c 1:3 rw'], [missing]),
+            (missing, missing, [], [missing]),
+            (str(regular), '/dev/zero', ['c 1:5 r'], [str(regular)]),
+        ):
+            with self.subTest(gpu=gpu, heap=heap):
+                self.devices(gpu, heap)
+                (self.state / 'running').unlink(missing_ok=True)
+                code, out, err = self.run_action('start')
+                self.assertEqual(code, 0, err)
+                self.assertIn('Plasma Mobile ready', out)
+                start = [line for line in self.log() if line.startswith('start ')][-1]
+                self.assertEqual(start.count('lxc.cgroup2.devices.allow='), len(rules), start)
+                self.assertNotIn('-s  ', start, 'LXC must never receive an empty setting')
+                for rule in rules:
+                    self.assertIn(f'-s lxc.cgroup2.devices.allow={rule}', start)
+                for path in absent:
+                    self.assertIn(f'Missing character device: {path}', err)
 
     # covers: install.app-restart-recovery/E5
     def test_remounted_storage_restarts_the_container_and_the_shared_folder_returns(self):
@@ -196,6 +237,11 @@ class LxcConfig(unittest.TestCase):
             'c 136:* rwm', 'c 10:229 rwm', 'c 10:200 rwm']))
         binds = [e.split()[0] for e in self.entries('lxc.mount.entry') if e.startswith('/dev/')]
         self.assertEqual(sorted(binds), ['/dev/dma_heap/system', '/dev/kgsl-3d0'])
+        # Non-Qualcomm phones such as husky must reach the desktop without KGSL;
+        # the optional bind must not make LXC abort before software rendering starts.
+        for entry in self.entries('lxc.mount.entry'):
+            if entry.startswith('/dev/'):
+                self.assertLessEqual({'bind', 'create=file', 'optional'}, set(entry.split()[3].split(',')))
 
 
 if __name__ == '__main__':

@@ -14,7 +14,11 @@ fi
 # them (docs/57). Only KWin needs this; clients keep linear buffers. KWin's Android backend
 # (--android-host, docs/72) needs no other settings: it knows the render device, the host's
 # buffer lease socket and what the host offers.
-export FD_KGSL_DMABUF_UBWC=1
+if [ -c /dev/kgsl-3d0 ]; then
+    export FD_KGSL_DMABUF_UBWC=1
+else
+    unset FD_KGSL_DMABUF_UBWC
+fi
 # Mobile input fields should summon the OSK even after a synthetic pointer event.
 export KWIN_IM_SHOW_ALWAYS=1
 # Bootstrap the host surface in pixels. KWin's Android output policy selects the first

@@ -161,6 +161,10 @@
     },
     {
       "id": "contract.gpu-device",
+      "requires_character_device": {
+        "path": "/dev/kgsl-3d0",
+        "reason": "No /dev/kgsl-3d0: this contract verifies the Qualcomm Adreno KGSL hardware path, unavailable on non-Qualcomm phones such as Pixel 8 Pro (husky)."
+      },
       "level": "full",
       "check": "interface_contract",
       "params": {
@@ -185,6 +189,10 @@
     },
     {
       "id": "contract.wifi-display",
+      "requires_character_device": {
+        "path": "/dev/kgsl-3d0",
+        "reason": "No /dev/kgsl-3d0: the current Wi-Fi Display provider uses Qualcomm WFD; it is not supported by this check on non-Qualcomm phones such as husky."
+      },
       "level": "full",
       "check": "interface_contract",
       "params": {
@@ -348,6 +356,10 @@
     },
     {
       "id": "recording.quicksetting",
+      "requires_character_device": {
+        "path": "/dev/kgsl-3d0",
+        "reason": "No /dev/kgsl-3d0: the current recording check needs the KGSL-backed compositor screencast path; the QPainter desktop on husky is outside this check."
+      },
       "level": "full",
       "check": "screen_recording",
       "params": {
@@ -372,6 +384,10 @@
     },
     {
       "id": "perf.compositor",
+      "requires_character_device": {
+        "path": "/dev/kgsl-3d0",
+        "reason": "No /dev/kgsl-3d0: this benchmark measures the Adreno compositor and KGSL GPU counters; it cannot validate husky software-rendering performance."
+      },
       "level": "full",
       "check": "compositor_perf",
       "params": {

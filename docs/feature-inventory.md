@@ -655,18 +655,18 @@ Agent 在自己的工作区（或用户指定的桌面）上打开应用、看�
 
 #### 应用在手机 GPU 上绘制（OpenGL / GLES）
 
-`apps.gpu` · Linux 系统功能 — 桌面和原生 Wayland 应用经本项目的 Mesa（KGSL 上的 freedreno）用 Adreno 710 画画面，Qt Quick 和 GTK 默认 GL。
+`apps.gpu` · Linux 系统功能 — 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 的手机保留软件渲染默认，Mesa 不强制选择 KGSL。
 
 经由接口：`kwin-android-host`
 
-- **E1** 普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
-- **E2** Qt Quick 应用和 plasmashell 滚动、切换时没有整屏灰色闪帧（会话默认 QSG_RHI_BACKEND=opengl）。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
+- **E1** 有 KGSL 的 Adreno 710 手机上，普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。（人工；只能在手机上看：渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染）
+- **E2** 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时保留 KWIN_COMPOSE=Q、QT_QUICK_BACKEND=software，清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。（单元测试、人工；只能在手机上看：整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查）
 - **E3** 应用抽屉滑动时 Surface 呈现间隔超过 12.6 ms 的比例低于 1%（GLES 合成）。（实机验收、人工；只能在手机上看：呈现间隔是手机 GPU 与安卓刷新下的性能，只能在手机上量）
 - **E4** 系统 Mesa 的包不会被发行版更新覆盖，升级 Mesa 后 KWin 不会因图形复位而中止。（缺口：只能在手机上换包重启工作区验证；没有自动检查）
 
 注意：
 - KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。 [docs/research/74-vaapi-feasibility.md](../docs/research/74-vaapi-feasibility.md) [docs/research/93-xwayland-kgsl-gpu.md](../docs/research/93-xwayland-kgsl-gpu.md)
-- 会话环境 gpu-env 必须带 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md)
+- 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。 [docs/40-plasma-mobile-integration.md](../docs/40-plasma-mobile-integration.md) [docs/108-husky-port.md](../docs/108-husky-port.md)
 - 2026-09-26 全局把 Qt Quick 改成 Vulkan 后语音助手整屏灰色闪帧，当天撤回；评估渲染后端必须做逐帧画面检测，不能只看帧间隔和 CPU。 [docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)
 - KWin 经 Zink 合成更慢（慢帧 5.06% 对 0.57%），KWin 原生 Vulkan 只省约 0.7–1.5 ms/帧 CPU，不值得维护分支；桌面合成保持 GLES。 [docs/51-plasma-vulkan-benchmark.md](../docs/51-plasma-vulkan-benchmark.md) [docs/56-kwin-vulkan-quantification.md](../docs/56-kwin-vulkan-quantification.md)
 - Mesa 换到上游 main 的尝试失败：freedreno 一渲染就 GPU hang，工作区 KWin abort；已退回 lfdevs 分支 98f3d622 加 4 个补丁。再试前要先二分定位上游回归。 [docs/research/94-mesa-base.md](../docs/research/94-mesa-base.md)
@@ -1267,7 +1267,7 @@ Linux 应用用手机的相机拍照录像，用手机的扬声器和麦克风�
 - **E3** 每个场景结束时恢复它改过的东西（无障碍开关、显示缩放和模式、录下的文件），不留在用户手机上。（单元测试）
 - **E4** 指标与较早发布的最新报告比较；合成器 paint 或呈现间隔 p95 比上一发布劣化超过 15% 即判失败。（实机验收、人工）
 - **E5** 部署和验收期间出现已知签名以外的崩溃即失败；安装之前发生的崩溃不算到新发布上。（实机验收）
-- **E6** 报告写到 .work/acceptance/<发布>/<时间>/report.json，并列出自动结果不能替代的人工项（画质、声学、音画同步、拼音手感、投屏）。（单元测试）
+- **E6** 报告写到 .work/acceptance/<发布>/<时间>/report.json，并列出自动结果不能替代的人工项（画质、声学、音画同步、拼音手感、投屏）。Android 无 KGSL 字符设备时，GPU 契约、录屏快捷设置、Adreno 合成性能和高通 WFD 契约记录 not applicable 及原因，不计为通过或失败；无法读取设备能力仍判失败。（单元测试）
 
 注意：
 - 验收前先看 dumpsys input 的 touchingPointers 为空：一次屏幕右下持续的实体触摸让注入的滑动成了多指手势，快捷设置拉不下来。 [docs/73-reduce-upstream-changes.md](../docs/73-reduce-upstream-changes.md)
@@ -2005,7 +2005,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 - **E1** 应用更新或宿主进程重启时，KWin 记录“Host connection lost”、等宿主 socket 可连接后以 133 退出并被重启，不留核心转储；Qt 客户端不在重连空窗里段错误，桌面恢复。（人工）
 - **E2** 一次 GPU 启动失败（宿主重启时 EGL 暂不可用）不会让 plasmashell 永久改用软件渲染；有 GPU 时每次会话都清掉 SceneGraphBackend=software，应用抽屉不会空白。（人工）
 - **E3** 新会话等上一个会话的 startplasma-wayland 真正退出后才设置环境，plasmashell 总以手机 shell 启动，不会变成桌面版 shell。（系统测试、人工）
-- **E4** GPU 设置、登录 PATH 在任何会话单元启动前导入用户管理器；Qt 按 XDG_CURRENT_DESKTOP 选平台主题，旧会话强加的主题不残留到新会话。（实机验收）
+- **E4** GPU 设置、登录 PATH 在任何会话单元启动前导入用户管理器；Qt 按 XDG_CURRENT_DESKTOP 选平台主题，旧会话强加的主题不残留到新会话。（单元测试、实机验收）
 - **E5** 桌面上没有 Linux 锁屏挡住（锁定交给安卓），kaccess 不在没有 X 显示的会话里反复崩溃。（系统测试）
 
 注意：
@@ -2750,7 +2750,7 @@ Agent 不靠点界面就能拿到合并日志、崩溃回溯、追踪、截图�
 
 `install.container-base` · 依赖安卓 — Android 侧控制器（rungic-plasma）、LXC 配置、容器 init 和随系统安装的配置文件（system/、两个系统包）： Ubuntu 容器以受限权限跑在 Android 上，其余领域的系统集成文件也从这里装进去。
 
-- **E1** 容器在 SELinux Enforcing 下运行，与 Android 共用网络但去掉 net_admin、net_raw、sys_module 等能力，只开放明确列出的设备（GPU、DMA heap、fuse、tun）；Android 重启后设备号变了也按当前设备号授权。（单元测试）
+- **E1** 容器在 SELinux Enforcing 下运行，与 Android 共用网络但去掉 net_admin、net_raw、sys_module 等能力，只开放明确列出的设备（GPU、DMA heap、fuse、tun）；Android 重启后设备号变了也按当前设备号授权。KGSL 和 DMA heap 独立按字符设备是否存在授权，缺失时记录日志并跳过可选挂载，非高通手机仍能启动容器。（单元测试）
 - **E2** 容器里 Flatpak 应用的沙箱能启动（/proc/sys/user 可写、有完整可见的 proc），其余 /proc/sys 仍只读。（人工）
 - **E3** 控制命令串行执行：Surface 重建和显式重启同时发生时，不会并行启动两次容器或会话。（单元测试）
 

@@ -467,7 +467,7 @@ features:
       Ubuntu 容器以受限权限跑在 Android 上，其余领域的系统集成文件也从这里装进去。
     experience:
       - id: E1
-        text: 容器在 SELinux Enforcing 下运行，与 Android 共用网络但去掉 net_admin、net_raw、sys_module 等能力，只开放明确列出的设备（GPU、DMA heap、fuse、tun）；Android 重启后设备号变了也按当前设备号授权。
+        text: 容器在 SELinux Enforcing 下运行，与 Android 共用网络但去掉 net_admin、net_raw、sys_module 等能力，只开放明确列出的设备（GPU、DMA heap、fuse、tun）；Android 重启后设备号变了也按当前设备号授权。KGSL 和 DMA heap 独立按字符设备是否存在授权，缺失时记录日志并跳过可选挂载，非高通手机仍能启动容器。
       - id: E2
         text: 容器里 Flatpak 应用的沙箱能启动（/proc/sys/user 可写、有完整可见的 proc），其余 /proc/sys 仍只读。
         evidence:

@@ -30,7 +30,9 @@ running() { [ "$("$ENTER" /usr/bin/lxc-info -n plasma -sH 2>/dev/null)" = RUNNIN
 attach() { "$ENTER" /usr/bin/lxc-attach -n plasma -- "$@"; }
 device_rule() (
     # Android can assign different character-device majors after a reboot.
-    [ -c "$1" ] || { echo "Missing character device: $1" >&2; exit 1; }
+    # Mali phones (e.g. husky) have no KGSL; either node may be absent.
+    # Keep software desktop startup available, without granting a phantom device.
+    [ -c "$1" ] || { echo "Missing character device: $1; skipping optional device rule" >&2; exit 0; }
     major_hex=$(stat -c '%t' "$1") || exit 1
     minor_hex=$(stat -c '%T' "$1") || exit 1
     case "$major_hex:$minor_hex" in
@@ -176,7 +178,9 @@ start_container() {
     # /var/lib/rungic-host (plasma.config): an image rootfs is not visible from here (docs/61 §7).
     mkdir -p "$HOST_STATE/transfer"
     printf '%s\n' "$label" | sed 's/:app_data_file:/:appdomain_tmpfs:/' > "$HOST_STATE/android-shm-context"
-    set -- -s "$gpu_rule" -s "$heap_rule"
+    set --
+    if [ -n "$gpu_rule" ]; then set -- "$@" -s "$gpu_rule"; fi
+    if [ -n "$heap_rule" ]; then set -- "$@" -s "$heap_rule"; fi
     # An image rootfs (system/rootfs-image, docs/61 §7): a pre-mount hook mounts its device-mapper
     # device onto the rootfs directory, and the data that must not roll back with the system comes
     # from state/ (bind mounts).
