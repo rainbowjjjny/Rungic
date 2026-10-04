@@ -150,7 +150,9 @@ def virgl(tmp_path):
         eglinfo.write_text('#!/bin/sh\n'
                            'test "$EGL_PLATFORM" = surfaceless && test "$GALLIUM_DRIVER" = virpipe || exit 9\n'
                            'test "$VTEST_SOCKET_NAME" = "' + str(shared / 'vtest.sock') + '" || exit 9\n'
-                           'test "$*" = "-B" || exit 9\n'
+                           # Real eglinfo -B also tries GBM/Wayland/X11 and exits 3 when they fail,
+                           # as on husky outside a session, even after printing the virgl renderer.
+                           'test "$*" = "-B -p surfaceless" || { echo "OpenGL ES profile renderer: virgl (Mali-G715)"; exit 3; }\n'
                            'test -z "${LIBGL_ALWAYS_SOFTWARE:-}${MESA_LOADER_DRIVER_OVERRIDE:-}" || exit 9\n'
                            'echo "OpenGL ES profile renderer: virgl (Mali-G715)"\n')
         eglinfo.chmod(0o755)

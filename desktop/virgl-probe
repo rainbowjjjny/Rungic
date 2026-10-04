@@ -10,10 +10,12 @@ socket=/mnt/android-wayland/vtest.sock
 printf 'running' | cmp -s - "$state" || printf 'running\n' | cmp -s - "$state" || exit 1
 # A stale KGSL/software override must not decide the capability of virpipe.
 unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_ALWAYS_SOFTWARE
+# Only the surfaceless platform: plain -B also tries GBM/Wayland/X11, which fail here and make
+# eglinfo exit 3 even after it printed the virgl renderer (husky).
 # A broken Mesa client may crash or ignore TERM; do not create cores or wait forever.
 ulimit -c 0
 if info=$(timeout -k 1s 2s env EGL_PLATFORM=surfaceless GALLIUM_DRIVER=virpipe \
-    VTEST_SOCKET_NAME="$socket" eglinfo -B 2>/dev/null); then
+    VTEST_SOCKET_NAME="$socket" eglinfo -B -p surfaceless 2>/dev/null); then
     printf '%s\n' "$info" | LC_ALL=C grep -Eq \
         '^[[:space:]]*OpenGL.*renderer( string)?:[[:space:]]*virgl([[:space:](]|$)'
 else
