@@ -45,6 +45,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             if(isDestroyed() || !started || frameGeneration!=surfaceGeneration) { awaitingFrame=false; return; }
             if(NativeBridge.isPhoneFrameReady(frameTicket)) {
                 awaitingFrame=false; loading.setVisibility(View.GONE); notifyState(getString(R.string.state_running));
+                // The session exists now. onStart's boost may have come before it (a new account),
+                // and its processes join the big cores only through an adopted user manager.
+                if(platform!=null)platform.desktopBoost(true);
             } else if(android.os.SystemClock.uptimeMillis()>frameDeadline) {
                 awaitingFrame=false; NativeBridge.cancelPhoneFrame(frameTicket);
                 showProblem(getString(R.string.display_unconfirmed), getString(R.string.display_unconfirmed_details), true);
