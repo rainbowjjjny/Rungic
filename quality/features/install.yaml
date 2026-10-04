@@ -679,6 +679,7 @@ features:
       - docs/75-image-build-separation.md
       - docs/80-g100-image-installation-retrospective.md
       - docs/83-x70-air-pro-onboarding.md
+      - docs/108-husky-port.md
 
   - id: install.rungicos-image
     title: 构建独立 RungicOS 镜像

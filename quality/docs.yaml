@@ -132,3 +132,4 @@
 - {path: docs/106-codex-desktop-operation.md, kind: journal, note: 默认 Codex 桌面操作与 API 备选的实现和验收}
 
 - {path: docs/107-android-sms.md, kind: journal, note: 安卓 SIM 短信接口与 USB G100 验收}
+- {path: docs/108-husky-port.md, kind: journal, note: Pixel 8 Pro（husky）移植计划与记录}

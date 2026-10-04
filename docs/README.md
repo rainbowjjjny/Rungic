@@ -240,3 +240,4 @@ Every feature, the experience it must give and the code, tests and documents beh
 | [miracast-video-modes.md](research/miracast-video-modes.md) | Miracast video modes: real capabilities, exact selection and acceptance |
 | [106-codex-desktop-operation.md](106-codex-desktop-operation.md) | Codex desktop operation by default, with optional API execution (2026-10-03) |
 | [107-android-sms.md](107-android-sms.md) | Android SIM text messages, send status and filtered replies (2026-10-04) |
+| [108-husky-port.md](108-husky-port.md) | Pixel 8 Pro (husky) port: plan, LXC GKI kernel and progress record (2026-10-04) |
