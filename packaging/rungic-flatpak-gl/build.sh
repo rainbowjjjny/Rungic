@@ -3,7 +3,8 @@
 # runtime's own GL.default has no KGSL driver and left Flatpak apps on llvmpipe. Runs in the
 # Freedesktop SDK's container image ("image" in package.json): the extension must link against
 # the runtime's libraries, not Ubuntu's. Same options as the system Mesa (desktop/mesa-meson-options)
-# plus softpipe, the fallback of an app that is not given /dev/kgsl-3d0.
+# plus softpipe, the fallback of an app that is not given /dev/kgsl-3d0. Without LLVM: the SDK
+# image has no llvm-config, and phones without KGSL use the runtime's GL.default instead (gpu-env).
 BRANCH=25.08
 PREFIX=/usr/lib/aarch64-linux-gnu/GL/rungic
 EXT=/var/lib/flatpak/extension/org.freedesktop.Platform.GL.rungic/aarch64/$BRANCH
@@ -13,7 +14,7 @@ python3 -c 'import yaml' 2>/dev/null || python3 -m pip install -q --target "$BUI
 export PYTHONPATH=$BUILD-py
 # The build tree is kept between builds (only what changed recompiles); set up again when the
 # options change. Its install root goes every time.
-options="--prefix=$PREFIX --libdir=lib $(grep -v -e '^--prefix' -e '^--libdir' -e '^-Dgallium-drivers=' "$SRC/desktop/mesa-meson-options" | tr '\n' ' ') -Dgallium-drivers=freedreno,zink,softpipe"
+options="--prefix=$PREFIX --libdir=lib $(grep -v -e '^--prefix' -e '^--libdir' -e '^-Dgallium-drivers=' -e '^-Dllvm=' "$SRC/desktop/mesa-meson-options" | tr '\n' ' ') -Dgallium-drivers=freedreno,zink,softpipe -Dllvm=disabled"
 if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.rungic-options" 2>/dev/null)" != "$options" ]; then
   rm -rf "$BUILD"
   # shellcheck disable=SC2086

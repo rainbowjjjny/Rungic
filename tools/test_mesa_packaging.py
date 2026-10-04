@@ -83,6 +83,21 @@ def test_packaged_cpu_gl_keeps_drivers_glvnd_and_llvm_runtime(tmp_path):
 
 
 # covers: apps.gpu/E5
+def test_flatpak_gl_extension_builds_without_llvm():
+    # The Flatpak GL extension builds Mesa in the Freedesktop SDK image, which has no
+    # llvm-config: inheriting the system Mesa's -Dllvm=enabled made meson fail there.
+    # It only serves KGSL phones (gpu-env); others keep the runtime's own GL.default.
+    script = (ROOT / 'packaging/rungic-flatpak-gl/build.sh').read_text()
+    line = next(l for l in script.splitlines() if l.startswith('options='))
+    out = subprocess.run(['sh', '-c', f'{line}\nprintf %s "$options"'], env={'SRC': str(ROOT), 'PATH': os.environ['PATH']},
+                         capture_output=True, text=True, check=True).stdout
+    opts = dict(a[2:].split('=', 1) for a in shlex.split(out) if a.startswith('-D'))
+    assert opts['llvm'] == 'disabled'
+    assert 'llvmpipe' not in opts['gallium-drivers'].split(',')
+    assert {'freedreno', 'zink', 'softpipe'} <= set(opts['gallium-drivers'].split(','))
+
+
+# covers: apps.gpu/E5
 def test_gbm_backend_ships_in_libgbm1_like_ubuntu(tmp_path):
     # Ubuntu resolute's libgbm1 (26.0.8-1ubuntu0.3) owns gbm/dri_gbm.so. If our
     # mesa-libgallium carried it, dpkg refuses the upgrade ("trying to overwrite
