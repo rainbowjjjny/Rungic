@@ -247,3 +247,7 @@ USB G100 已部署 `20260930.12`：suggestions `0.452`、voice-agent `0.453`、d
 ## 2026-10-05：husky virgl 会话选择与恢复（B3，离线验证）
 
 无 KGSL 的 Qt Quick/plasmashell 仅在 Android vtest 状态为 running、socket 存在且限时 surfaceless EGL 返回 virgl renderer 时选择 virpipe；否则保留 llvmpipe/OpenGL。KWin 保持 QPainter/SHM，Qualcomm 的 KGSL 设置不变。每次 plasmashell 启动前重新探测并清除用户管理器的旧 virpipe；取消该单元启动限流，以 5 秒间隔重试。新 helper/drop-in 由 plasma-config 包安装，登录 profile 不能绕过能力选择。代码、替身恢复测试和真实打包 recipe 临时安装已完成，真实 systemd/手机恢复与 GPU 画面尚未验收；Android supervisor（B2）与配套 Mesa 修复尚需集成；用户已确认 running/failed 单行状态、允许缺失，读取失败和额外内容均回退。容器没有新增 Mali 设备访问；仍存活但挂起的 shell 需 App 失效通知对接，边界与来源见 [108 篇 B3 记录](../108-husky-port.md)。
+
+## 2026-10-05：husky PanVK/kbase 原型（A2，局部实测）
+
+Android 初始 PID namespace 中的独立 Linux Vulkan 程序，通过私有 glibc/Mesa PanVK/kbase UK 1.38，在 Mali-G715 实际完成单次三角形绘制、fence 和像素回读；修正错误 DRM 后端探测后再次通过。真实 Wayland vkcube 在首帧呈现前则触发该测试 context 的 GPU 地址转换/指令故障并退出，后续 Zink、持续负载和会话集成已停止，窗口呈现未验收。首轮单次绘制后的 SystemUI fence timeout 因果仍需排查。没有更换系统 Mesa、会话环境或容器设备规则。A1 Panthor 已实际回移/编译，但 OEM ABI 与 Pixel 平台接入未完成，未加载驱动；PID namespace 修复联合内核已临时启动，319 个原模块名单一致、Enforcing；A1 资源探针报告现有 mali 的 MMIO busy，未加载 Panthor。祖先校验修正后，受控私有 PID namespace 的 UK 1.38/SET_FLAGS/属性查询与 shim 首次命中已实测通过，没有 GPU 提交，仍不替代容器 GPU 验收。实验后已重启回原内核；用户解锁后 Rungic 已恢复，vtest.state=running、plasmashell 使用 virpipe，画面已核对。详细阶段与失败恢复见 [108 篇续试记录](../108-husky-port.md#记录)。

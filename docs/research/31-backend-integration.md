@@ -601,3 +601,7 @@ G100 ZY32M9MRVP / Android 16 / APK 2.29 开发版通过标准 PA 客户端检查
 ## 2026-10-05：virgl/vtest 能力与会话环境（B3，未部署）
 
 候选链路：Qt Quick/plasmashell → Mesa virpipe → `/mnt/android-wayland/vtest.sock` → Android init PID 命名空间中的 vtest/EGL → Mali；帧仍走 KWin QPainter/SHM。`vtest.state` 由 Android supervisor（B2）写入；用户已确认单行 running/failed、允许缺失，Linux 只接受准确的 `running` 或 `running\n`。Linux `rungic-virgl-probe` 检查状态/Unix socket，EGL 探测限时 2 秒、TERM 后最多 1 秒强杀，只接受成功退出且 renderer 为 virgl；失败不导出 GALLIUM_DRIVER/VTEST_SOCKET_NAME，沿用 llvmpipe。session 在导入前清除管理器旧值，profile 禁止覆盖这两项，KWin 启动器始终清除 virpipe。plasmashell 的 ExecStartPre 在每次尝试重新探测、同步用户管理器，更新失败则不带旧环境启动；5 秒重试、此单元不设启动限流，保留上游 D-Bus/会话生命周期。Linux 替身验证不是 Android app 域 fd/mmap、真实 systemd 环境时序或断连恢复验收；Android supervisor、配套 Mesa 修复与 App 失效通知尚需集成。不映射或打开 `/dev/mali0`。详细实现、来源和余项见 [108 篇](../108-husky-port.md)。
+
+## 2026-10-05：PanVK 直接 kbase 实验接口（A2）
+
+局部已验证链路为独立 Linux Vulkan 程序 → 私有 Mesa PanVK → 原厂 kbase UK 1.38 → Mali-G715，整个 GPU 客户端留在 Android 初始 PID namespace。64×64 单次绘制/同步/回读通过；这不是容器内直接访问 Mali 的验收。候选窗口链路复用 Mesa common CPU WSI：GPU 图像回读/复制 → Wayland `wl_shm` → 现有 KWin/Android 宿主；真实 vkcube 在首帧呈现前出现 GPU fault，窗口链路尚未通过。此前“必须另写 wl_shm”不是当前固定源码的缺口，接下来应先定位共享 PanVK 提交、同步或内存生命周期问题。固定 kbase 的全局 TGID/私有 PID namespace 错配仍是另一项独立内核问题；候选 shim 的 ABI 离线核验与临时启动已通过，319 个原模块名单一致、Enforcing；祖先校验修正后，受控私有 namespace 最小 UAPI 与 shim 首次命中也已实测通过（不创建 GPU 队列、不绘图）；候选试验后已回原内核；用户解锁后原有 Android 入口与 Rungic/B 会话已恢复，vtest.state=running、plasmashell 使用 virpipe。现有容器仍不增加 Mali 节点。A1 还需在保持 OEM ABI、现有 Android 所有权和 Pixel 电源/时钟接口的条件下接入 Panthor。来源、补丁、实验边界与恢复记录见 [108 篇](../108-husky-port.md#记录)。
