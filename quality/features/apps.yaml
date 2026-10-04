@@ -104,7 +104,7 @@ features:
     status: live
     platform: linux
     interfaces: [kwin-android-host]
-    summary: 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 的手机保留软件渲染默认，Mesa 不强制选择 KGSL。
+    summary: 有 KGSL 时桌面和原生 Wayland 应用经 Mesa freedreno 用 Adreno 绘制，Qt Quick 和 GTK 默认 GL；无 KGSL 时经探测选择 virgl，服务不可用则保持 llvmpipe。
     experience:
       - id: E1
         text: 有 KGSL 的 Adreno 710 手机上，普通用户的应用拿到的是硬件 GL（渲染器 FD710，GLES 3.2 / GL 4.6），不是 llvmpipe 或 softpipe。
@@ -113,7 +113,7 @@ features:
           - {doc: docs/research/93-xwayland-kgsl-gpu.md, date: 2026-09-30, note: "Krita 6 原生 Wayland 下渲染器 FD710"}
         device: 渲染器是不是 FD710 取决于手机的 Adreno 710 与 /dev/kgsl-3d0；系统测试容器没有 GPU，只有软件渲染
       - id: E2
-        text: 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（Mesa llvmpipe，软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。
+        text: 有 KGSL 时 Qt Quick 应用和 plasmashell 默认 OpenGL，滚动、切换时没有整屏灰色闪帧；无 KGSL 时 KWin 保留 KWIN_COMPOSE=Q（QPainter，共享内存交给应用），Qt Quick 与 plasmashell 用 OpenGL（服务可用时 virgl，否则 Mesa llvmpipe；软件场景图会让 Dock 和应用抽屉空白），清除 KGSL 驱动覆盖与用户管理器中的旧 Adreno 设置，KWin 不启用 UBWC。
         evidence:
           - {doc: docs/56-kwin-vulkan-quantification.md, date: 2026-09-26, note: "撤回 Vulkan 后 414 帧逐帧检测无闪屏"}
         device: 整屏灰色闪帧要在手机 GPU 上逐帧检测（docs/56）；会话默认的 GL 设置由 tools/tests/test_gpu_env.py 检查
@@ -127,7 +127,11 @@ features:
         gap: 只能在手机上换包重启工作区验证；没有自动检查
       - id: E5
         text: 同一 Mesa 配方包含 softpipe、LLVM-enabled llvmpipe 与 freedreno/zink（KGSL），为 husky 等非高通手机提供 CPU GL 构建路径；运行包带 Ubuntu resolute 的 libllvm21 依赖，保留 GLVND。
+      - id: E6
+        text: 无 KGSL 时，仅在 vtest.state 为 running、socket 存在且限时 EGL 探测报告 virgl 渲染器后，应用才选择 virpipe；探测失败、超时或服务失效则保持 llvmpipe，清除会话及用户管理器中的旧 virpipe 设置。Qualcomm 保持 KGSL，KWin 始终不使用 virpipe；容器不增加 Mali 设备访问。
     pitfalls:
+      - text: M5 B3 只完成 Linux 能力选择与崩溃后重试；依赖 Android supervisor（B2）发布单行 running/failed 状态（用户已确认格式）、Mesa 编入 virgl 并修复事务锁/断连。真实 EGL 输出、app 域共享内存与服务消失后客户端不挂起仍待实机验收；不能把离线环境测试称为 GPU 加速已部署。
+        docs: [docs/108-husky-port.md]
       - text: KGSL 不是 DRM 设备，没有 /dev/dri；所有依赖 drmGetDevice2、DRM 渲染节点或 PCI 信息的路径（Firefox VA-API、wlroots、ksystemstats、Xwayland glamor）都要单独处理，不能伪造 DRM 节点。
         docs: [docs/research/74-vaapi-feasibility.md, docs/research/93-xwayland-kgsl-gpu.md]
       - text: 仅有 KGSL 字符设备时，gpu-env 才设置 MESA_LOADER_DRIVER_OVERRIDE=kgsl、FD_KGSL_ENABLE_DMABUF=1，并清掉 LIBGL_ALWAYS_SOFTWARE 和遗留的 QT_QUICK_BACKEND=software；husky 有 DMA heap 但无 KGSL，不能据 heap 判断有 Adreno。软件路径环境已离线核验，llvmpipe 包构建与实机桌面仍待 108 篇的 2.3/M4 验收。
@@ -152,6 +156,9 @@ features:
       - desktop/package-mesa.py
       - tools/test_mesa_packaging.py
       - desktop/gpu-env
+      - desktop/virgl-probe
+      - desktop/plasmashell-gpu-refresh
+      - desktop/plasmashell-gpu.conf
       - desktop/gpu-ahb-probe.c
       - shared/graphics/
       - desktop/bench/

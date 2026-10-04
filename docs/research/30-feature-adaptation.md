@@ -240,3 +240,7 @@ USB G100 已部署 `20260930.12`：suggestions `0.452`、voice-agent `0.453`、d
 ## 2026-10-04：husky 的无 KGSL 启动路径（离线验证）
 
 容器控制器按 KGSL 与 DMA heap 字符设备是否存在分别生成规则，两项挂载可选；husky 有 `/dev/dma_heap/system`，无 `/dev/kgsl-3d0`，不会因缺 KGSL 中止容器启动。会话保留 QPainter/Qt Quick 软件默认并清除旧 Adreno 环境，KWin 的 UBWC 仅在 KGSL 存在时启用；GPU 契约、录屏快捷设置、Adreno 性能与高通 WFD 契约在 Android 无 KGSL 时记录带原因的 `not applicable`，不计为通过。离线替身覆盖两条路径及 Qualcomm 失败保留，未部署或验收手机桌面；Mesa llvmpipe 包仍待 2.3，实机仍待 M4。详见 [108 篇](../108-husky-port.md) Tasks 2.1、2.2、2.5。
+
+## 2026-10-05：husky virgl 会话选择与恢复（B3，离线验证）
+
+无 KGSL 的 Qt Quick/plasmashell 仅在 Android vtest 状态为 running、socket 存在且限时 surfaceless EGL 返回 virgl renderer 时选择 virpipe；否则保留 llvmpipe/OpenGL。KWin 保持 QPainter/SHM，Qualcomm 的 KGSL 设置不变。每次 plasmashell 启动前重新探测并清除用户管理器的旧 virpipe；取消该单元启动限流，以 5 秒间隔重试。新 helper/drop-in 由 plasma-config 包安装，登录 profile 不能绕过能力选择。代码、替身恢复测试和真实打包 recipe 临时安装已完成，真实 systemd/手机恢复与 GPU 画面尚未验收；Android supervisor（B2）与配套 Mesa 修复尚需集成；用户已确认 running/failed 单行状态、允许缺失，读取失败和额外内容均回退。容器没有新增 Mali 设备访问；仍存活但挂起的 shell 需 App 失效通知对接，边界与来源见 [108 篇 B3 记录](../108-husky-port.md)。

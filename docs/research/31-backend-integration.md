@@ -594,3 +594,7 @@ G100 ZY32M9MRVP / Android 16 / APK 2.29 开发版通过标准 PA 客户端检查
 ## 2026-10-04：无 KGSL 的共享图形入口（离线验证）
 
 启动时 KGSL 与 DMA heap 分别按字符设备存在性授权并可选挂载，不能把 DMA heap 存在当成 Adreno 能力。KGSL 路径仍为应用 → Mesa freedreno/OpenGL → KWin Android 后端 → Android AHB/Adreno；无 KGSL 时保留应用软件渲染 → KWin QPainter/SHM → Android 宿主的共享内存合成路径，`gpu-env` 与用户管理器清除旧 KGSL 驱动覆盖，KWin 不启用 UBWC。后端沿用已有 `android-backend-hooks.patch`，本轮未修改协议或 Android 硬件通路。验收从 Android root 只读核对 KGSL，避免把 Qualcomm 容器漏挂设备误标为不适用；指定的 GPU、录屏、性能与 WFD 检查缺 KGSL 时记录原因与 `passed=null`。上述选择逻辑已用离线替身测试，llvmpipe 构建、真实帧输出和触摸仍待 [108 篇](../108-husky-port.md) 2.3/M4。
+
+## 2026-10-05：virgl/vtest 能力与会话环境（B3，未部署）
+
+候选链路：Qt Quick/plasmashell → Mesa virpipe → `/mnt/android-wayland/vtest.sock` → Android init PID 命名空间中的 vtest/EGL → Mali；帧仍走 KWin QPainter/SHM。`vtest.state` 由 Android supervisor（B2）写入；用户已确认单行 running/failed、允许缺失，Linux 只接受准确的 `running` 或 `running\n`。Linux `rungic-virgl-probe` 检查状态/Unix socket，EGL 探测限时 2 秒、TERM 后最多 1 秒强杀，只接受成功退出且 renderer 为 virgl；失败不导出 GALLIUM_DRIVER/VTEST_SOCKET_NAME，沿用 llvmpipe。session 在导入前清除管理器旧值，profile 禁止覆盖这两项，KWin 启动器始终清除 virpipe。plasmashell 的 ExecStartPre 在每次尝试重新探测、同步用户管理器，更新失败则不带旧环境启动；5 秒重试、此单元不设启动限流，保留上游 D-Bus/会话生命周期。Linux 替身验证不是 Android app 域 fd/mmap、真实 systemd 环境时序或断连恢复验收；Android supervisor、配套 Mesa 修复与 App 失效通知尚需集成。不映射或打开 `/dev/mali0`。详细实现、来源和余项见 [108 篇](../108-husky-port.md)。

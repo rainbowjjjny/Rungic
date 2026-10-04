@@ -1,4 +1,5 @@
 # One coherent Mesa package family, with the distribution GLVND dispatchers.
+unset GALLIUM_DRIVER VTEST_SOCKET_NAME
 if [ -c /dev/kgsl-3d0 ]; then
     export MESA_LOADER_DRIVER_OVERRIDE=kgsl
     export FD_KGSL_ENABLE_DMABUF=1
@@ -22,4 +23,11 @@ else
     unset VK_DRIVER_FILES GSK_RENDERER FLATPAK_GL_DRIVERS LIBGL_ALWAYS_SOFTWARE
     export QSG_RHI_BACKEND=opengl
     export QT_QUICK_BACKEND=
+    export KWIN_COMPOSE=Q
+    # Socket presence is not health: require a bounded EGL test reporting virgl.
+    # Without it, leave Mesa's existing llvmpipe selection untouched.
+    if /usr/libexec/rungic-virgl-probe 2>/dev/null; then
+        export GALLIUM_DRIVER=virpipe
+        export VTEST_SOCKET_NAME=/mnt/android-wayland/vtest.sock
+    fi
 fi

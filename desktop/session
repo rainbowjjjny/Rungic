@@ -62,12 +62,13 @@ kbuildsycoca6 --noincremental
 # The login PATH and the user's login exports too, for units and programs systemd starts.
 # Importing an unset shell variable does not remove the manager's previous value.
 # On phones without KGSL, clear old Adreno settings for all subsequent user units.
+systemctl --user unset-environment GALLIUM_DRIVER VTEST_SOCKET_NAME 2>/dev/null || true
 if [ ! -c /dev/kgsl-3d0 ]; then
     systemctl --user unset-environment MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF FD_KGSL_DMABUF_UBWC \
         VK_DRIVER_FILES QSG_RHI_BACKEND GSK_RENDERER FLATPAK_GL_DRIVERS 2>/dev/null || true
 fi
 # shellcheck disable=SC2086
-systemctl --user import-environment MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF VK_DRIVER_FILES \
+systemctl --user import-environment GALLIUM_DRIVER VTEST_SOCKET_NAME MESA_LOADER_DRIVER_OVERRIDE FD_KGSL_ENABLE_DMABUF VK_DRIVER_FILES \
     QSG_RHI_BACKEND GSK_RENDERER QT_QUICK_BACKEND KWIN_COMPOSE FLATPAK_GL_DRIVERS PATH $RUNGIC_LOGIN_VARS 2>/dev/null || true
 # Qt picks the platform theme from XDG_CURRENT_DESKTOP, as in Plasma's desktop session (plasma-mobile
 # no longer forces it). One forced by an earlier session stays in the user manager, and from there in
